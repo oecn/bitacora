@@ -3,6 +3,7 @@
   "years": 80,
   "heatmap_color": "#40c463",
   "heatmap_color_trabajo": "#2f3b59",
+  "main_color": "#3b7c7a",
   "notes": {
     "1339": [
       {
@@ -20,7 +21,7 @@
         "date": "2026-01-05"
       },
       {
-        "title": "\ud83d\udfe2 Nueva bitacora",
+        "title": "Nueva bitacora",
         "description": "",
         "date": "2026-01-05"
       }
@@ -29,6 +30,18 @@
       {
         "title": "\ud83d\udfe2  cheque familiar",
         "description": "matias me entrego un cheque de familliar para depositar el lunes",
+        "date": "2026-01-05"
+      }
+    ],
+    "1339": [
+      {
+        "title": "\u26a0\ufe0f pos sin funcionar",
+        "description": "El post de la red infonet de la caja 33 no funciona el tactil y ahora se apag\u00f3 y ya no enciende.... ya se inform\u00f3 en el soporte pero aun no tenemos respuestas....",
+        "date": "2026-01-05"
+      },
+      {
+        "title": "\u26a0\ufe0f Nueva bitacora",
+        "description": "PC de recepcion de mercaderia no funciona",
         "date": "2026-01-05"
       }
     ]

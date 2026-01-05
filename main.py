@@ -34,6 +34,8 @@ class LifeWeeksWidget(QWidget):
         self.today = QDate.currentDate()
         self.years = 80
         self.weeks_per_year = 52
+        self.day_cols = 52
+        self.day_rows = 7
         self.cell = 11
         self.gap = 3
         self.left_gutter = 44
@@ -49,25 +51,42 @@ class LifeWeeksWidget(QWidget):
 
         self.entries_mode = False
         self.selected_week = None
+        self.selected_date = None
         self.week_counts = {}
+        self.day_counts = {}
         self.heatmap_colors = []
+        self.view_mode = "weeks"
 
         self.setFocusPolicy(Qt.StrongFocus)
         self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 
     def sizeHint(self):
-        width = (
-            self.left_gutter
-            + self.right_gutter
-            + self.weeks_per_year * (self.cell + self.gap)
-            - self.gap
-        )
-        height = (
-            self.top_gutter
-            + self.bottom_gutter
-            + self.years * (self.cell + self.gap)
-            - self.gap
-        )
+        if self.view_mode == "days":
+            width = (
+                self.left_gutter
+                + self.right_gutter
+                + self.day_cols * (self.cell + self.gap)
+                - self.gap
+            )
+            height = (
+                self.top_gutter
+                + self.bottom_gutter
+                + self.day_rows * (self.cell + self.gap)
+                - self.gap
+            )
+        else:
+            width = (
+                self.left_gutter
+                + self.right_gutter
+                + self.weeks_per_year * (self.cell + self.gap)
+                - self.gap
+            )
+            height = (
+                self.top_gutter
+                + self.bottom_gutter
+                + self.years * (self.cell + self.gap)
+                - self.gap
+            )
         return QSize(width, height)
 
     def set_birth_date(self, date_value):
@@ -79,19 +98,50 @@ class LifeWeeksWidget(QWidget):
         self.updateGeometry()
         self.update()
 
+    def set_cell_size(self, cell, gap):
+        self.cell = cell
+        self.gap = gap
+        self.updateGeometry()
+        self.update()
+
+    def set_view_mode(self, mode):
+        if mode not in ("weeks", "days"):
+            return
+        self.view_mode = mode
+        if self.view_mode == "days":
+            self.ensure_selected_date()
+        self.updateGeometry()
+        self.update()
+
     def set_entries_mode(self, enabled):
         self.entries_mode = enabled
         if enabled and self.selected_week is None:
             self.selected_week = self.weeks_lived()
             self.weekSelected.emit(self.selected_week)
+        if enabled and self.view_mode == "days":
+            self.ensure_selected_date()
         self.update()
 
     def set_week_counts(self, counts):
         self.week_counts = counts or {}
         self.update()
 
+    def set_day_counts(self, counts):
+        self.day_counts = counts or {}
+        self.update()
+
     def set_heatmap_colors(self, colors):
         self.heatmap_colors = colors or []
+        self.update()
+
+    def set_main_color(self, color_value):
+        if not color_value:
+            return
+        base = QColor(color_value)
+        if not base.isValid():
+            return
+        self.color_lived = base
+        self.color_current = base.darker(140)
         self.update()
 
     def select_week(self, week_index):
@@ -116,6 +166,40 @@ class LifeWeeksWidget(QWidget):
             return max_weeks
         return weeks
 
+    def ensure_selected_date(self):
+        start_date = self.daily_start_date()
+        end_date = self.daily_end_date()
+        if (
+            self.selected_date is None
+            or not self.selected_date.isValid()
+            or self.selected_date < start_date
+            or self.selected_date > self.today
+        ):
+            if self.today < start_date:
+                self.selected_date = end_date
+            else:
+                self.selected_date = self.today
+
+    def select_date(self, date_value):
+        if date_value is None or not date_value.isValid():
+            return
+        start_date = self.daily_start_date()
+        end_date = self.daily_end_date()
+        if date_value < start_date or date_value > end_date:
+            return
+        if date_value > self.today:
+            return
+        self.selected_date = date_value
+        self.update()
+
+    def daily_end_date(self):
+        days_to_end = 7 - self.today.dayOfWeek()
+        return self.today.addDays(days_to_end)
+
+    def daily_start_date(self):
+        total_days = self.day_cols * self.day_rows
+        return self.daily_end_date().addDays(-(total_days - 1))
+
     def week_at(self, pos):
         x = pos.x() - self.left_gutter
         y = pos.y() - self.top_gutter
@@ -129,20 +213,98 @@ class LifeWeeksWidget(QWidget):
             return None
         return row * self.weeks_per_year + col
 
+    def day_at(self, pos):
+        x = pos.x() - self.left_gutter
+        y = pos.y() - self.top_gutter
+        if x < 0 or y < 0:
+            return None
+        col = int(x // (self.cell + self.gap))
+        row = int(y // (self.cell + self.gap))
+        if col < 0 or col >= self.day_cols:
+            return None
+        if row < 0 or row >= self.day_rows:
+            return None
+        return self.daily_start_date().addDays(col * 7 + row)
+
+    def day_index_for_date(self, date_value):
+        if date_value is None or not date_value.isValid():
+            return None
+        start_date = self.daily_start_date()
+        total_days = self.day_cols * self.day_rows
+        index = start_date.daysTo(date_value)
+        if index < 0 or index >= total_days:
+            return None
+        return index
+
+    def date_for_day_index(self, index):
+        if index is None:
+            return None
+        total_days = self.day_cols * self.day_rows
+        if index < 0 or index >= total_days:
+            return None
+        return self.daily_start_date().addDays(index)
+
+    def week_index_for_date(self, date_value):
+        if date_value is None or not date_value.isValid():
+            return None
+        if date_value < self.birth_date:
+            return None
+        days = self.birth_date.daysTo(date_value)
+        return max(0, days // 7)
+
     def mousePressEvent(self, event):
         if not self.entries_mode:
             return
         self.setFocus()
         pos = event.position() if hasattr(event, "position") else event.pos()
-        index = self.week_at(pos)
-        if index is not None:
-            self.select_week(index)
-            return
+        if self.view_mode == "days":
+            date_value = self.day_at(pos)
+            if date_value is not None:
+                if date_value > self.today:
+                    return
+                self.select_date(date_value)
+                week_index = self.week_index_for_date(date_value)
+                if week_index is not None:
+                    self.select_week(week_index)
+                    return
+        else:
+            index = self.week_at(pos)
+            if index is not None:
+                self.select_week(index)
+                return
         super().mousePressEvent(event)
 
     def keyPressEvent(self, event):
         if not self.entries_mode:
             super().keyPressEvent(event)
+            return
+        if self.view_mode == "days":
+            self.ensure_selected_date()
+            index = self.day_index_for_date(self.selected_date)
+            if index is None:
+                super().keyPressEvent(event)
+                return
+            key = event.key()
+            if key == Qt.Key_Left:
+                index -= self.day_rows
+            elif key == Qt.Key_Right:
+                index += self.day_rows
+            elif key == Qt.Key_Up:
+                index -= 1
+            elif key == Qt.Key_Down:
+                index += 1
+            else:
+                super().keyPressEvent(event)
+                return
+            date_value = self.date_for_day_index(index)
+            if date_value is None:
+                return
+            if date_value > self.today:
+                return
+            self.select_date(date_value)
+            week_index = self.week_index_for_date(date_value)
+            if week_index is not None:
+                self.select_week(week_index)
             return
         if self.selected_week is None:
             self.select_week(self.weeks_lived())
@@ -165,6 +327,9 @@ class LifeWeeksWidget(QWidget):
 
     def paintEvent(self, event):
         super().paintEvent(event)
+        if self.view_mode == "days":
+            self.paint_daily()
+            return
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing, False)
 
@@ -229,6 +394,65 @@ class LifeWeeksWidget(QWidget):
                     painter.drawRect(border_rect.adjusted(1, 1, -1, -1))
                     painter.setPen(grid_pen)
                 if self.selected_week == index:
+                    painter.setPen(selected_pen)
+                    painter.drawRect(border_rect.adjusted(1, 1, -1, -1))
+                    painter.setPen(grid_pen)
+
+    def paint_daily(self):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing, False)
+
+        grid_pen = QPen(self.color_grid, 1)
+        current_pen = QPen(self.color_current, 1)
+        selected_pen = QPen(self.color_selected, 1)
+        grid_pen.setCosmetic(True)
+        current_pen.setCosmetic(True)
+        selected_pen.setCosmetic(True)
+
+        start_date = self.daily_start_date()
+        month_font = QFont("Segoe UI", 7, QFont.DemiBold)
+        painter.setFont(month_font)
+        painter.setPen(QPen(self.color_grid, 1))
+
+        last_month = None
+        for col in range(self.day_cols):
+            date_value = start_date.addDays(col * 7)
+            month = date_value.month()
+            if last_month is None or month != last_month:
+                x = self.left_gutter + col * (self.cell + self.gap)
+                painter.drawText(x, 12, date_value.toString("MMM"))
+                last_month = month
+
+        day_labels = {1: "Mon", 3: "Wed", 5: "Fri"}
+        for row in range(self.day_rows):
+            day_of_week = ((start_date.dayOfWeek() - 1 + row) % 7) + 1
+            label = day_labels.get(day_of_week)
+            if label:
+                y = self.top_gutter + row * (self.cell + self.gap)
+                painter.drawText(6, y + self.cell, label)
+
+        for col in range(self.day_cols):
+            for row in range(self.day_rows):
+                date_value = start_date.addDays(col * 7 + row)
+                key = date_value.toString("yyyy-MM-dd")
+                count = self.day_counts.get(key, 0)
+                x = self.left_gutter + col * (self.cell + self.gap)
+                y = self.top_gutter + row * (self.cell + self.gap)
+                rect = QRectF(x, y, self.cell, self.cell)
+                border_rect = QRectF(x + 0.5, y + 0.5, self.cell - 1, self.cell - 1)
+
+                if self.entries_mode and self.heatmap_colors and count > 0:
+                    tone_index = min(count, len(self.heatmap_colors) - 1)
+                    painter.fillRect(rect, self.heatmap_colors[tone_index])
+                painter.setPen(grid_pen)
+                painter.drawRect(border_rect)
+
+                if date_value == self.today:
+                    painter.setPen(current_pen)
+                    painter.drawRect(border_rect.adjusted(1, 1, -1, -1))
+                    painter.setPen(grid_pen)
+
+                if self.selected_date is not None and date_value == self.selected_date:
                     painter.setPen(selected_pen)
                     painter.drawRect(border_rect.adjusted(1, 1, -1, -1))
                     painter.setPen(grid_pen)
@@ -335,6 +559,7 @@ class MainWindow(QMainWindow):
             "bitacora": "#3b7c7a",
             "trabajo": "#2f3b59",
         }
+        self.view_mode = "weeks"
 
         central = QWidget(self)
         self.setCentralWidget(central)
@@ -370,6 +595,21 @@ class MainWindow(QMainWindow):
         view_label = QLabel("View", self)
         self.view_combo = QComboBox(self)
         self.view_combo.addItems(["Normal", "Bitacora", "Trabajo"])
+        self.mode_button = QPushButton("Dias", self)
+        self.mode_button.setToolTip("Cambiar modo de heatmap")
+        self.main_color_label = QLabel("Color semanas", self)
+        self.main_color_combo = QComboBox(self)
+        main_color_options = [
+            ("Teal (actual)", "#3b7c7a"),
+            ("Neon Green", "#39ff14"),
+            ("Hot Pink", "#ff2d95"),
+            ("Electric Blue", "#00b3ff"),
+            ("Bright Orange", "#ff6f00"),
+            ("Lime", "#b9ff1a"),
+            ("Cyan", "#00f5ff"),
+        ]
+        for name, value in main_color_options:
+            self.main_color_combo.addItem(name, value)
 
         controls.addWidget(birth_label)
         controls.addWidget(self.birth_input)
@@ -379,6 +619,9 @@ class MainWindow(QMainWindow):
         controls.addSpacing(12)
         controls.addWidget(view_label)
         controls.addWidget(self.view_combo)
+        controls.addWidget(self.mode_button)
+        controls.addWidget(self.main_color_label)
+        controls.addWidget(self.main_color_combo)
         controls.addStretch(1)
 
         heatmap_controls = QHBoxLayout()
@@ -471,10 +714,10 @@ class MainWindow(QMainWindow):
         work_tag_layout.addWidget(work_tag_label)
         self.work_tag_buttons = []
         self.work_tag_options = [
-            ("🟢", "Recibido"),
-            ("🔴", "Entregado"),
-            ("🛈", "Info"),
-            ("⚠️", "Muy importante"),
+            ("\U0001F7E2", "Recibido"),
+            ("\U0001F534", "Entregado"),
+            ("\U0001F6C8", "Info"),
+            ("\u26A0\ufe0f", "Muy importante"),
         ]
         for emoji, text in self.work_tag_options:
             button = QPushButton(emoji, self.work_tag_row)
@@ -565,8 +808,13 @@ class MainWindow(QMainWindow):
         self.save_button.clicked.connect(self.save_entry)
         self.delete_button.clicked.connect(self.delete_entry)
         self.notes_list.currentItemChanged.connect(self.on_entry_selected)
+        self.mode_button.clicked.connect(self.toggle_heatmap_mode)
+        self.main_color_combo.currentIndexChanged.connect(
+            self.on_main_color_changed
+        )
 
         self.apply_theme()
+        self.update_main_color()
         self.update_heatmap_colors()
         self.load_data()
         self.on_view_changed(self.view_combo.currentIndex())
@@ -691,13 +939,16 @@ class MainWindow(QMainWindow):
         self.heatmap_label.setVisible(entries_mode)
         self.heatmap_combo.setVisible(entries_mode)
         self.heatmap_preview.setVisible(entries_mode)
+        self.main_color_label.setVisible(not entries_mode)
+        self.main_color_combo.setVisible(not entries_mode)
         if entries_mode:
             self.sync_heatmap_combo()
             self.update_heatmap_colors()
-            self.update_week_counts()
+            self.update_counts()
             self.on_week_selected(self.life_widget.selected_week)
         else:
             self.life_widget.set_week_counts({})
+            self.life_widget.set_day_counts({})
         self.heatmap_legend.setVisible(entries_mode)
         self.work_tag_row.setVisible(self.current_view() == "trabajo")
 
@@ -721,6 +972,13 @@ class MainWindow(QMainWindow):
     def week_label_text(self, week_index):
         if week_index is None:
             return "Semana seleccionada: -"
+        if (
+            self.life_widget.view_mode == "days"
+            and self.life_widget.selected_date is not None
+            and self.life_widget.selected_date.isValid()
+        ):
+            date_text = self.life_widget.selected_date.toString("yyyy-MM-dd")
+            return f"Fecha seleccionada: {date_text}"
         week_number = week_index + 1
         date_value = self.life_widget.birth_date.addDays(week_index * 7)
         date_text = date_value.toString("yyyy-MM-dd")
@@ -757,6 +1015,13 @@ class MainWindow(QMainWindow):
             return "trabajo"
         return "bitacora"
 
+    def selected_entry_date(self):
+        if self.life_widget.view_mode == "days":
+            date_value = self.life_widget.selected_date
+            if date_value is not None and date_value.isValid():
+                return date_value.toString("yyyy-MM-dd")
+        return QDate.currentDate().toString("yyyy-MM-dd")
+
     def create_entry(self):
         if self.current_week is None:
             selected = self.life_widget.selected_week
@@ -765,14 +1030,14 @@ class MainWindow(QMainWindow):
                 self.life_widget.select_week(selected)
             self.current_week = selected
         entries = self.current_notes().setdefault(self.current_week, [])
-        entry_date = QDate.currentDate().toString("yyyy-MM-dd")
+        entry_date = self.selected_entry_date()
         title = "Nueva bitacora"
         if self.current_view() == "trabajo" and self.work_tag:
             title = f"{self.work_tag} {title}"
         entry = {"title": title, "description": "", "date": entry_date}
         entries.append(entry)
         self.refresh_entries_list()
-        self.update_week_counts()
+        self.update_counts()
         self.select_entry_item(len(entries) - 1)
         self.save_data()
 
@@ -787,7 +1052,7 @@ class MainWindow(QMainWindow):
         description = self.desc_edit.toPlainText().strip()
         entries = self.current_notes().setdefault(self.current_week, [])
         if self.current_entry is None:
-            entry_date = QDate.currentDate().toString("yyyy-MM-dd")
+            entry_date = self.selected_entry_date()
             entries.append(
                 {"title": title, "description": description, "date": entry_date}
             )
@@ -803,7 +1068,7 @@ class MainWindow(QMainWindow):
                 "date": entry_date,
             }
         self.refresh_entries_list()
-        self.update_week_counts()
+        self.update_counts()
         self.select_entry_item(self.current_entry)
         self.save_data()
 
@@ -819,7 +1084,7 @@ class MainWindow(QMainWindow):
         else:
             self.current_entry = max(0, self.current_entry - 1)
         self.refresh_entries_list()
-        self.update_week_counts()
+        self.update_counts()
         self.select_entry_item(self.current_entry)
         self.save_data()
 
@@ -882,6 +1147,11 @@ class MainWindow(QMainWindow):
             self.current_entry = entry_index
             self.title_input.setText(entry.get("title", ""))
             self.desc_edit.setPlainText(entry.get("description", ""))
+            if self.life_widget.view_mode == "days":
+                date_text = str(entry.get("date", "")).strip()
+                date_value = QDate.fromString(date_text, "yyyy-MM-dd")
+                if date_value.isValid():
+                    self.life_widget.select_date(date_value)
         if self.current_week != week_index:
             self.life_widget.select_week(week_index)
 
@@ -896,6 +1166,30 @@ class MainWindow(QMainWindow):
             if isinstance(entries, list):
                 counts[week_index] = len(entries)
         self.life_widget.set_week_counts(counts)
+
+    def update_day_counts(self):
+        counts = {}
+        for entries in self.current_notes().values():
+            if not isinstance(entries, list):
+                continue
+            for entry in entries:
+                if not isinstance(entry, dict):
+                    continue
+                date_text = str(entry.get("date", "")).strip()
+                date_value = QDate.fromString(date_text, "yyyy-MM-dd")
+                if not date_value.isValid():
+                    continue
+                key = date_value.toString("yyyy-MM-dd")
+                counts[key] = counts.get(key, 0) + 1
+        self.life_widget.set_day_counts(counts)
+
+    def update_counts(self):
+        self.update_week_counts()
+        self.update_day_counts()
+
+    def update_main_color(self):
+        color_value = self.main_color_combo.currentData() or "#3b7c7a"
+        self.life_widget.set_main_color(color_value)
 
     def update_heatmap_colors(self):
         view = self.current_view()
@@ -958,6 +1252,11 @@ class MainWindow(QMainWindow):
         if not self.loading:
             self.save_data()
 
+    def on_main_color_changed(self):
+        self.update_main_color()
+        if not self.loading:
+            self.save_data()
+
     def week_entry_date(self, week_index):
         if week_index is None:
             return QDate.currentDate().toString("yyyy-MM-dd")
@@ -968,6 +1267,15 @@ class MainWindow(QMainWindow):
         widget_width = self.life_widget.sizeHint().width()
         scrollbar_width = self.scroll.verticalScrollBar().sizeHint().width()
         self.scroll.setFixedWidth(widget_width + scrollbar_width + 6)
+
+    def toggle_heatmap_mode(self):
+        self.view_mode = "days" if self.view_mode == "weeks" else "weeks"
+        self.life_widget.set_view_mode(self.view_mode)
+        self.mode_button.setText("Semanas" if self.view_mode == "days" else "Dias")
+        self.update_scroll_width()
+        self.update_counts()
+        if self.life_widget.entries_mode:
+            self.on_week_selected(self.life_widget.selected_week)
 
     def load_data(self):
         if not os.path.exists(self.data_path):
@@ -984,6 +1292,11 @@ class MainWindow(QMainWindow):
             if combo_index != -1:
                 self.heatmap_combo.setCurrentIndex(combo_index)
             self.heatmap_colors_by_view["bitacora"] = heatmap_color.strip()
+        main_color = data.get("main_color")
+        if isinstance(main_color, str) and main_color.strip():
+            combo_index = self.main_color_combo.findData(main_color.strip())
+            if combo_index != -1:
+                self.main_color_combo.setCurrentIndex(combo_index)
         work_heatmap = data.get("heatmap_color_trabajo")
         if isinstance(work_heatmap, str) and work_heatmap.strip():
             self.heatmap_colors_by_view["trabajo"] = work_heatmap.strip()
@@ -1070,7 +1383,8 @@ class MainWindow(QMainWindow):
             self.work_notes = cleaned_work
         self.loading = False
         self.refresh_entries_list()
-        self.update_week_counts()
+        self.update_counts()
+        self.update_main_color()
 
     def save_data(self):
         data = {
@@ -1078,6 +1392,7 @@ class MainWindow(QMainWindow):
             "years": self.years_input.value(),
             "heatmap_color": self.heatmap_colors_by_view.get("bitacora"),
             "heatmap_color_trabajo": self.heatmap_colors_by_view.get("trabajo"),
+            "main_color": self.main_color_combo.currentData(),
             "notes": {str(k): v for k, v in self.week_notes.items()},
             "work_notes": {str(k): v for k, v in self.work_notes.items()},
         }
