@@ -1,0 +1,31 @@
+{
+  "birth_date": "2000-05-04",
+  "years": 80,
+  "heatmap_color": "#40c463",
+  "heatmap_color_trabajo": "#2f3b59",
+  "notes": {
+    "1339": [
+      {
+        "title": "pruebamk1",
+        "description": "probando",
+        "date": "2026-01-05"
+      }
+    ]
+  },
+  "work_notes": {
+    "1338": [
+      {
+        "title": "\ud83d\udd34 boton de promo",
+        "description": "entregue el boton de la promo a nino, debe de traer el lunes para pruebas",
+        "date": "2026-01-05"
+      }
+    ],
+    "1337": [
+      {
+        "title": "\ud83d\udfe2  cheque familiar",
+        "description": "matias me entrego un cheque de familliar para depositar el lunes",
+        "date": "2026-01-05"
+      }
+    ]
+  }
+}
