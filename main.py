@@ -52,6 +52,7 @@ class LifeWeeksWidget(QWidget):
         self.week_counts = {}
         self.heatmap_colors = []
 
+        self.setFocusPolicy(Qt.StrongFocus)
         self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 
     def sizeHint(self):
@@ -131,10 +132,36 @@ class LifeWeeksWidget(QWidget):
     def mousePressEvent(self, event):
         if not self.entries_mode:
             return
+        self.setFocus()
         pos = event.position() if hasattr(event, "position") else event.pos()
         index = self.week_at(pos)
         if index is not None:
             self.select_week(index)
+            return
+        super().mousePressEvent(event)
+
+    def keyPressEvent(self, event):
+        if not self.entries_mode:
+            super().keyPressEvent(event)
+            return
+        if self.selected_week is None:
+            self.select_week(self.weeks_lived())
+            return
+        row = self.selected_week // self.weeks_per_year
+        col = self.selected_week % self.weeks_per_year
+        key = event.key()
+        if key == Qt.Key_Left:
+            col = max(0, col - 1)
+        elif key == Qt.Key_Right:
+            col = min(self.weeks_per_year - 1, col + 1)
+        elif key == Qt.Key_Up:
+            row = max(0, row - 1)
+        elif key == Qt.Key_Down:
+            row = min(self.years - 1, row + 1)
+        else:
+            super().keyPressEvent(event)
+            return
+        self.select_week(row * self.weeks_per_year + col)
 
     def paintEvent(self, event):
         super().paintEvent(event)
@@ -258,16 +285,38 @@ class NoteItemWidget(QFrame):
 
         text_box = QVBoxLayout()
         text_box.setSpacing(2)
-        title_label = QLabel(title, self)
+        emoji, clean_title = self.split_title_emoji(title)
+        title_row = QHBoxLayout()
+        title_row.setContentsMargins(0, 0, 0, 0)
+        title_row.setSpacing(6)
+        if emoji:
+            emoji_label = QLabel(emoji, self)
+            emoji_label.setFont(QFont("Segoe UI Emoji", 11))
+            emoji_label.setFixedSize(20, 20)
+            emoji_label.setAlignment(Qt.AlignCenter)
+            title_row.addWidget(emoji_label)
+        title_label = QLabel(clean_title, self)
         title_label.setObjectName("noteTitle")
+        title_label.setFont(QFont("Segoe UI", 9, QFont.DemiBold))
+        title_label.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
+        title_row.addWidget(title_label, 1)
         subtitle_label = QLabel(subtitle, self)
         subtitle_label.setObjectName("noteSubtitle")
 
-        text_box.addWidget(title_label)
+        text_box.addLayout(title_row)
         text_box.addWidget(subtitle_label)
 
         layout.addWidget(date_box)
         layout.addLayout(text_box, 1)
+
+    def split_title_emoji(self, title):
+        if not title:
+            return "", ""
+        value = title.strip()
+        if len(value) >= 2 and value[1] == " ":
+            emoji = value[0]
+            return emoji, value[2:].lstrip()
+        return "", value
 
 
 class MainWindow(QMainWindow):
@@ -416,7 +465,7 @@ class MainWindow(QMainWindow):
         self.work_tag_row = QWidget(detail_panel)
         work_tag_layout = QHBoxLayout(self.work_tag_row)
         work_tag_layout.setContentsMargins(0, 0, 0, 0)
-        work_tag_layout.setSpacing(8)
+        work_tag_layout.setSpacing(6)
         work_tag_label = QLabel("Tipo", self.work_tag_row)
         work_tag_label.setObjectName("detailLabel")
         work_tag_layout.addWidget(work_tag_label)
@@ -424,12 +473,14 @@ class MainWindow(QMainWindow):
         self.work_tag_options = [
             ("🟢", "Recibido"),
             ("🔴", "Entregado"),
-            ("❕", "Info"),
-            ("❗", "Muy importante"),
+            ("🛈", "Info"),
+            ("⚠️", "Muy importante"),
         ]
         for emoji, text in self.work_tag_options:
-            button = QPushButton(f"{emoji} {text}", self.work_tag_row)
-            button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+            button = QPushButton(emoji, self.work_tag_row)
+            button.setToolTip(text)
+            button.setFixedSize(36, 28)
+            button.setMinimumHeight(28)
             button.clicked.connect(
                 lambda checked=False, tag=emoji: self.set_work_tag(tag)
             )
@@ -546,6 +597,7 @@ class MainWindow(QMainWindow):
             "  border: 1px solid #1f1f1f;"
             "  border-radius: 6px;"
             "  padding: 6px 8px;"
+            "  min-height: 28px;"
             "}"
             "QListWidget {"
             "  background: #ffffff;"
@@ -575,6 +627,7 @@ class MainWindow(QMainWindow):
             "  border: 1px solid #d3cbbb;"
             "  border-radius: 8px;"
             "  padding: 6px 8px;"
+            "  min-height: 28px;"
             "}"
             "QListWidget {"
             "  background: #ffffff;"
@@ -612,6 +665,7 @@ class MainWindow(QMainWindow):
             "#noteTitle {"
             "  color: #111111;"
             "  font-weight: bold;"
+            "  padding-top: 2px;"
             "}"
             "#noteSubtitle {"
             "  color: #6a6358;"
