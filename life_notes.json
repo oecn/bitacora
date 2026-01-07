@@ -1,6 +1,7 @@
 {
   "birth_date": "2000-05-04",
   "years": 80,
+  "next_entry_id": 18,
   "heatmap_color": "#40c463",
   "heatmap_color_trabajo": "#2f3b59",
   "main_color": "#3b7c7a",
@@ -9,7 +10,9 @@
       {
         "title": "SORTEO",
         "description": "hoy es el dia del sorteo. Estoy nervioso, veremos que sucede, hicimos pruebas con ever y todo apuntaba a que funcionaria correctamente, pero aun no lo hicimos con los sistemas de luces pantalla y sonido, vendra a verificar a la tarde. Tuve regalo de reyes, fue grato y raro, no me lo esperaba",
-        "date": "2026-01-05"
+        "date": "2026-01-05",
+        "links": [],
+        "id": 1
       }
     ]
   },
@@ -18,56 +21,69 @@
       {
         "title": "\ud83d\udd34 boton de promo",
         "description": "entregue el boton de la promo a nino, debe de traer el lunes para pruebas",
-        "date": "2026-01-05"
-      },
-      {
-        "title": "Nueva bitacora",
-        "description": "",
-        "date": "2026-01-05"
+        "date": "2026-01-05",
+        "links": [],
+        "id": 2
       }
     ],
     "1337": [
       {
         "title": "\ud83d\udfe2  cheque familiar",
         "description": "matias me entrego un cheque de familliar para depositar el lunes",
-        "date": "2026-01-05"
+        "date": "2026-01-05",
+        "links": [],
+        "id": 4
       }
     ],
     "1339": [
       {
         "title": "\u26a0\ufe0f pos sin funcionar",
         "description": "El post de la red infonet de la caja 33 no funciona el tactil y ahora se apag\u00f3 y ya no enciende.... ya se inform\u00f3 en el soporte pero aun no tenemos respuestas....",
-        "date": "2026-01-05"
+        "date": "2026-01-05",
+        "links": [],
+        "id": 5
       },
       {
         "title": "\u26a0\ufe0f Nueva bitacora",
         "description": "PC de recepcion de mercaderia no funciona",
-        "date": "2026-01-05"
+        "date": "2026-01-05",
+        "links": [],
+        "id": 6
       },
       {
         "title": "\ud83d\udd34 CHEQUE ita",
         "description": "Fue entregado 2(dos) cheques a don osvaldo en un sobre, ambos de la cuenta tarjeta de Itaugua.",
-        "date": "2026-01-06"
+        "date": "2026-01-06",
+        "links": [],
+        "id": 7
       },
       {
         "title": "\ud83d\udfe2 radios",
         "description": "Entregue 2(dos) radios a matias.",
-        "date": "2026-01-07"
+        "date": "2026-01-07",
+        "links": [],
+        "id": 8
       },
       {
         "title": "\ud83d\udfe2 CHEQUE ITA",
         "description": "recibi los 2 cheques que le habia entregado a don osvaldo, no tienen nada, no fueron utilizados",
-        "date": "2026-01-07"
+        "date": "2026-01-07",
+        "links": [],
+        "id": 9
       },
       {
         "title": "\u26a0\ufe0f POS SIN FUNCIONAR",
         "description": "pos de la red dinelco no carga",
-        "date": "2026-01-07"
+        "date": "2026-01-07",
+        "links": [],
+        "id": 10
       },
       {
         "title": "\ud83d\udfe2 contrato unico contiental, promo",
         "description": "contrato unico de continental. Contrato de promo que esta por terminar, debo hacerle firmar a don osvaldo.",
-        "date": "2026-01-07"
+        "date": "2026-01-07",
+        "links": [],
+        "id": 11
       }
     ]
   }

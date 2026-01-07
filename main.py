@@ -2,7 +2,7 @@ import json
 import os
 import sys
 
-from PySide6.QtCore import QDate, QRectF, QSize, Qt, Signal
+from PySide6.QtCore import QDate, QDateTime, QTime, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QPainter, QPen
 from PySide6.QtWidgets import (
     QApplication,
@@ -22,7 +22,10 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
     QScrollArea,
+    QTabWidget,
 )
+
+from bitacorasolo import BitacoraSoloTab
 
 
 class LifeWeeksWidget(QWidget):
@@ -478,11 +481,23 @@ class LegendItem(QFrame):
 
 
 class NoteItemWidget(QFrame):
-    def __init__(self, date_value, title, subtitle, parent=None):
+    def __init__(
+        self,
+        date_value,
+        title,
+        subtitle,
+        parent=None,
+        connector_color=None,
+        connector_top=False,
+        connector_bottom=False,
+    ):
         super().__init__(parent)
         self.setObjectName("noteItem")
+        self.connector_color = QColor(connector_color) if connector_color else None
+        self.connector_top = connector_top
+        self.connector_bottom = connector_bottom
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(10, 8, 10, 8)
+        layout.setContentsMargins(26, 8, 10, 8)
         layout.setSpacing(10)
 
         month = date_value.toString("MMM").upper()
@@ -542,6 +557,25 @@ class NoteItemWidget(QFrame):
             return emoji, value[2:].lstrip()
         return "", value
 
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        if not self.connector_color or not self.connector_color.isValid():
+            return
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing, True)
+        pen = QPen(self.connector_color, 6, Qt.SolidLine, Qt.RoundCap)
+        painter.setPen(pen)
+        center_y = self.height() / 2
+        top_y = 6 if self.connector_top else center_y
+        bottom_y = self.height() - 6 if self.connector_bottom else center_y
+        x = 12
+        painter.drawLine(x, top_y, x, bottom_y)
+        painter.setBrush(self.connector_color)
+        painter.setPen(Qt.NoPen)
+        painter.drawEllipse(int(x - 8), int(center_y - 8), 16, 16)
+        painter.setPen(pen)
+        painter.drawLine(x, center_y, x + 10, center_y)
+
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -553,6 +587,7 @@ class MainWindow(QMainWindow):
         self.current_entry = None
         self.loading = False
         self.work_tag = None
+        self.next_entry_id = 1
         self.data_path = os.path.join(os.path.dirname(__file__), "life_notes.json")
         self.heatmap_base_color = QColor("#3b7c7a")
         self.heatmap_colors_by_view = {
@@ -624,8 +659,6 @@ class MainWindow(QMainWindow):
         controls.addWidget(self.main_color_combo)
         controls.addStretch(1)
 
-        heatmap_controls = QHBoxLayout()
-        heatmap_controls.setSpacing(8)
         self.heatmap_label = QLabel("Color heatmap", self)
         self.heatmap_combo = QComboBox(self)
         self.heatmap_combo.setMinimumWidth(140)
@@ -655,16 +688,11 @@ class MainWindow(QMainWindow):
             swatch.setLineWidth(1)
             preview_layout.addWidget(swatch)
             self.heatmap_swatches.append(swatch)
-        heatmap_controls.addWidget(self.heatmap_label)
-        heatmap_controls.addWidget(self.heatmap_combo)
-        heatmap_controls.addWidget(self.heatmap_preview)
-        heatmap_controls.addStretch(1)
 
         root_layout.addLayout(controls)
-        root_layout.addLayout(heatmap_controls)
-
-        content_layout = QHBoxLayout()
-        content_layout.setSpacing(10)
+        controls.addWidget(self.heatmap_label)
+        controls.addWidget(self.heatmap_combo)
+        controls.addWidget(self.heatmap_preview)
 
         self.notes_panel = QWidget(self)
         notes_layout = QVBoxLayout(self.notes_panel)
@@ -736,18 +764,28 @@ class MainWindow(QMainWindow):
         self.desc_edit = QTextEdit(detail_panel)
         self.desc_edit.setPlaceholderText("Escribe la descripcion de la bitacora.")
 
+        related_label = QLabel("Relacionadas", detail_panel)
+        related_label.setObjectName("detailLabel")
+        self.related_list = QListWidget(detail_panel)
+        self.related_list.setSpacing(6)
+        self.related_list.setMinimumHeight(90)
+
         buttons_layout = QHBoxLayout()
         buttons_layout.setSpacing(12)
         buttons_layout.setContentsMargins(0, 8, 0, 0)
         self.new_button = QPushButton("Nueva bitacora", detail_panel)
         self.save_button = QPushButton("Guardar cambios", detail_panel)
+        self.followup_button = QPushButton("Accion tomada", detail_panel)
         self.delete_button = QPushButton("Eliminar", detail_panel)
         self.delete_button.setObjectName("dangerButton")
         self.new_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.save_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.followup_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.delete_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.followup_button.setEnabled(False)
         buttons_layout.addWidget(self.new_button)
         buttons_layout.addWidget(self.save_button)
+        buttons_layout.addWidget(self.followup_button)
         buttons_layout.addWidget(self.delete_button)
 
         detail_layout.addWidget(title_label)
@@ -755,6 +793,8 @@ class MainWindow(QMainWindow):
         detail_layout.addWidget(self.work_tag_row)
         detail_layout.addWidget(desc_label)
         detail_layout.addWidget(self.desc_edit, 1)
+        detail_layout.addWidget(related_label)
+        detail_layout.addWidget(self.related_list)
         detail_layout.addLayout(buttons_layout)
 
         detail_panel.setMinimumWidth(380)
@@ -771,12 +811,18 @@ class MainWindow(QMainWindow):
         self.scroll.setAlignment(Qt.AlignLeft | Qt.AlignTop)
         self.scroll.setStyleSheet("background: #f6f2ea;")
         self.update_scroll_width()
-
-        content_layout.addWidget(self.scroll, 0)
         self.notes_panel.setFixedWidth(660)
-        content_layout.addWidget(self.notes_panel)
 
-        root_layout.addLayout(content_layout, 1)
+        self.tabs = QTabWidget(self)
+        self.calendar_tab = QWidget(self.tabs)
+        self.calendar_layout = QHBoxLayout(self.calendar_tab)
+        self.calendar_layout.setSpacing(10)
+        self.calendar_layout.addWidget(self.scroll, 0)
+        self.calendar_layout.addWidget(self.notes_panel)
+        self.solo_tab = BitacoraSoloTab(self.tabs)
+        self.tabs.addTab(self.calendar_tab, "Calendario")
+        self.tabs.addTab(self.solo_tab, "Bitacora")
+        root_layout.addWidget(self.tabs, 1)
 
         self.heatmap_legend = QWidget(self)
         legend_layout = QHBoxLayout(self.heatmap_legend)
@@ -806,12 +852,15 @@ class MainWindow(QMainWindow):
         self.life_widget.weekSelected.connect(self.on_week_selected)
         self.new_button.clicked.connect(self.create_entry)
         self.save_button.clicked.connect(self.save_entry)
+        self.followup_button.clicked.connect(self.create_followup_entry)
         self.delete_button.clicked.connect(self.delete_entry)
         self.notes_list.currentItemChanged.connect(self.on_entry_selected)
+        self.related_list.itemClicked.connect(self.on_related_clicked)
         self.mode_button.clicked.connect(self.toggle_heatmap_mode)
         self.main_color_combo.currentIndexChanged.connect(
             self.on_main_color_changed
         )
+        self.tabs.currentChanged.connect(self.on_tab_changed)
 
         self.apply_theme()
         self.update_main_color()
@@ -932,25 +981,64 @@ class MainWindow(QMainWindow):
         )
 
     def on_view_changed(self, index):
+        if self.is_solo_view() and index == 0:
+            self.view_combo.blockSignals(True)
+            self.view_combo.setCurrentIndex(1)
+            self.view_combo.blockSignals(False)
+            index = 1
         entries_mode = index in (1, 2)
+        solo_mode = self.is_solo_view()
         self.current_entry = None
         self.notes_panel.setVisible(entries_mode)
         self.life_widget.set_entries_mode(entries_mode)
-        self.heatmap_label.setVisible(entries_mode)
-        self.heatmap_combo.setVisible(entries_mode)
-        self.heatmap_preview.setVisible(entries_mode)
+        self.heatmap_label.setVisible(entries_mode and not solo_mode)
+        self.heatmap_combo.setVisible(entries_mode and not solo_mode)
+        self.heatmap_preview.setVisible(entries_mode and not solo_mode)
+        self.mode_button.setVisible(not solo_mode)
         self.main_color_label.setVisible(not entries_mode)
         self.main_color_combo.setVisible(not entries_mode)
         if entries_mode:
             self.sync_heatmap_combo()
             self.update_heatmap_colors()
             self.update_counts()
-            self.on_week_selected(self.life_widget.selected_week)
+            if self.is_solo_view():
+                self.week_label.setText("Bitacora completa")
+                self.refresh_entries_list()
+            else:
+                self.on_week_selected(self.life_widget.selected_week)
         else:
             self.life_widget.set_week_counts({})
             self.life_widget.set_day_counts({})
-        self.heatmap_legend.setVisible(entries_mode)
+        self.heatmap_legend.setVisible(entries_mode and not solo_mode)
         self.work_tag_row.setVisible(self.current_view() == "trabajo")
+
+    def is_solo_view(self):
+        return self.tabs.currentIndex() == 1
+
+    def move_notes_panel(self, target_layout, target_parent):
+        if self.notes_panel.parent() is target_parent:
+            return
+        self.notes_panel.setParent(target_parent)
+        target_layout.addWidget(self.notes_panel)
+
+    def on_tab_changed(self, index):
+        if index == 1:
+            if self.view_combo.currentIndex() == 0:
+                self.view_combo.setCurrentIndex(1)
+            self.notes_panel.setMinimumWidth(660)
+            self.notes_panel.setMaximumWidth(16777215)
+            self.notes_panel.setSizePolicy(
+                QSizePolicy.Expanding, QSizePolicy.Expanding
+            )
+            self.solo_tab.set_content(self.notes_panel)
+        else:
+            self.notes_panel.setFixedWidth(660)
+            self.notes_panel.setMaximumWidth(660)
+            self.notes_panel.setSizePolicy(
+                QSizePolicy.Fixed, QSizePolicy.Expanding
+            )
+            self.move_notes_panel(self.calendar_layout, self.calendar_tab)
+        self.on_view_changed(self.view_combo.currentIndex())
 
     def on_birth_changed(self, date_value):
         self.life_widget.set_birth_date(date_value)
@@ -993,11 +1081,11 @@ class MainWindow(QMainWindow):
         entries = self.entries_for_week(week_index)
         if entries:
             if self.current_entry is None or self.current_entry >= len(entries):
-                self.select_entry_item(0)
+                self.select_entry_item(0, week_index)
             else:
-                self.select_entry_item(self.current_entry)
+                self.select_entry_item(self.current_entry, week_index)
         else:
-            self.select_entry_item(None)
+            self.select_entry_item(None, week_index)
 
     def entries_for_week(self, week_index):
         if week_index is None:
@@ -1015,12 +1103,83 @@ class MainWindow(QMainWindow):
             return "trabajo"
         return "bitacora"
 
+    def all_entries_for_view(self):
+        rows = []
+        for week_index, entries in self.current_notes().items():
+            if not isinstance(entries, list):
+                continue
+            for entry_index, entry in enumerate(entries):
+                rows.append((week_index, entry_index, entry))
+        def sort_key(row):
+            entry = row[2]
+            date_text = str(entry.get("date", "")).strip()
+            date_value = QDate.fromString(date_text, "yyyy-MM-dd")
+            if not date_value.isValid():
+                date_value = QDate.fromString(
+                    self.week_entry_date(row[0]), "yyyy-MM-dd"
+                )
+            time_text = str(entry.get("time", "")).strip()
+            time_value = QTime.fromString(time_text, "HH:mm")
+            if not time_value.isValid():
+                time_value = QTime(0, 0)
+            date_time = QDateTime(date_value, time_value)
+            return date_time.toSecsSinceEpoch()
+        rows.sort(key=sort_key, reverse=True)
+        return rows
+
+    def clean_links(self, links):
+        if not isinstance(links, list):
+            return []
+        cleaned = []
+        for value in links:
+            if isinstance(value, int):
+                cleaned.append(value)
+            elif isinstance(value, str) and value.isdigit():
+                cleaned.append(int(value))
+        return cleaned
+
+    def ensure_entry_id(self, entry):
+        entry_id = entry.get("id")
+        if isinstance(entry_id, int) and entry_id > 0:
+            if entry_id >= self.next_entry_id:
+                self.next_entry_id = entry_id + 1
+            return entry_id
+        entry_id = self.next_entry_id
+        self.next_entry_id += 1
+        entry["id"] = entry_id
+        return entry_id
+
+    def remove_links_to(self, entry_id):
+        if entry_id is None:
+            return
+        for entries in self.current_notes().values():
+            if not isinstance(entries, list):
+                continue
+            for entry in entries:
+                links = entry.get("links")
+                if isinstance(links, list) and entry_id in links:
+                    entry["links"] = [value for value in links if value != entry_id]
+
+    def find_entry_by_id(self, entry_id):
+        if entry_id is None:
+            return None
+        for week_index, entries in self.current_notes().items():
+            if not isinstance(entries, list):
+                continue
+            for entry_index, entry in enumerate(entries):
+                if entry.get("id") == entry_id:
+                    return week_index, entry_index, entry
+        return None
+
     def selected_entry_date(self):
         if self.life_widget.view_mode == "days":
             date_value = self.life_widget.selected_date
             if date_value is not None and date_value.isValid():
                 return date_value.toString("yyyy-MM-dd")
         return QDate.currentDate().toString("yyyy-MM-dd")
+
+    def current_time_text(self):
+        return QTime.currentTime().toString("HH:mm")
 
     def create_entry(self):
         if self.current_week is None:
@@ -1031,14 +1190,22 @@ class MainWindow(QMainWindow):
             self.current_week = selected
         entries = self.current_notes().setdefault(self.current_week, [])
         entry_date = self.selected_entry_date()
+        entry_time = self.current_time_text()
         title = "Nueva bitacora"
         if self.current_view() == "trabajo" and self.work_tag:
             title = f"{self.work_tag} {title}"
-        entry = {"title": title, "description": "", "date": entry_date}
+        entry = {
+            "title": title,
+            "description": "",
+            "date": entry_date,
+            "time": entry_time,
+            "links": [],
+        }
+        self.ensure_entry_id(entry)
         entries.append(entry)
         self.refresh_entries_list()
         self.update_counts()
-        self.select_entry_item(len(entries) - 1)
+        self.select_entry_item(len(entries) - 1, self.current_week)
         self.save_data()
 
     def save_entry(self):
@@ -1053,23 +1220,38 @@ class MainWindow(QMainWindow):
         entries = self.current_notes().setdefault(self.current_week, [])
         if self.current_entry is None:
             entry_date = self.selected_entry_date()
+            entry_time = self.current_time_text()
             entries.append(
-                {"title": title, "description": description, "date": entry_date}
+                {
+                    "title": title,
+                    "description": description,
+                    "date": entry_date,
+                    "time": entry_time,
+                    "links": [],
+                }
             )
             self.current_entry = len(entries) - 1
+            self.ensure_entry_id(entries[self.current_entry])
         else:
             if self.current_entry < 0 or self.current_entry >= len(entries):
                 return
             existing = entries[self.current_entry]
             entry_date = existing.get("date") or self.week_entry_date(self.current_week)
+            entry_time = existing.get("time") or self.current_time_text()
+            entry_links = self.clean_links(existing.get("links"))
+            entry_id = existing.get("id")
             entries[self.current_entry] = {
+                "id": entry_id,
                 "title": title,
                 "description": description,
                 "date": entry_date,
+                "time": entry_time,
+                "links": entry_links,
             }
+            self.ensure_entry_id(entries[self.current_entry])
         self.refresh_entries_list()
         self.update_counts()
-        self.select_entry_item(self.current_entry)
+        self.select_entry_item(self.current_entry, self.current_week)
         self.save_data()
 
     def delete_entry(self):
@@ -1077,7 +1259,9 @@ class MainWindow(QMainWindow):
             return
         entries = self.entries_for_week(self.current_week)
         if 0 <= self.current_entry < len(entries):
-            entries.pop(self.current_entry)
+            removed = entries.pop(self.current_entry)
+            removed_id = removed.get("id") if isinstance(removed, dict) else None
+            self.remove_links_to(removed_id)
         if not entries:
             self.current_notes().pop(self.current_week, None)
             self.current_entry = None
@@ -1085,39 +1269,136 @@ class MainWindow(QMainWindow):
             self.current_entry = max(0, self.current_entry - 1)
         self.refresh_entries_list()
         self.update_counts()
-        self.select_entry_item(self.current_entry)
+        self.select_entry_item(self.current_entry, self.current_week)
         self.save_data()
 
     def refresh_entries_list(self):
         self.notes_list.blockSignals(True)
         self.notes_list.clear()
-        if self.current_week is None:
+        if self.current_week is None and not self.is_solo_view():
             self.clear_entry_form()
             self.notes_list.blockSignals(False)
             return
-        entries = self.entries_for_week(self.current_week)
-        for index, entry in enumerate(entries):
+        if self.is_solo_view():
+            rows = self.all_entries_for_view()
+        else:
+            rows = [
+                (self.current_week, index, entry)
+                for index, entry in enumerate(self.entries_for_week(self.current_week))
+            ]
+        entry_ids = []
+        id_to_row = {}
+        for row_index, row in enumerate(rows):
+            entry = row[2]
+            entry_id = entry.get("id")
+            if isinstance(entry_id, int):
+                entry_ids.append(entry_id)
+                id_to_row[entry_id] = row_index
+            else:
+                entry_ids.append(None)
+        groups = {}
+        if entry_ids:
+            parent = {}
+
+            def find(item):
+                while parent[item] != item:
+                    parent[item] = parent[parent[item]]
+                    item = parent[item]
+                return item
+
+            def union(a, b):
+                root_a = find(a)
+                root_b = find(b)
+                if root_a != root_b:
+                    parent[root_b] = root_a
+
+            for entry_id in entry_ids:
+                if entry_id is not None:
+                    parent[entry_id] = entry_id
+            for entry_id, row_index in id_to_row.items():
+                entry = rows[row_index][2]
+                for link_id in self.clean_links(entry.get("links")):
+                    if link_id in parent:
+                        union(entry_id, link_id)
+            for entry_id in entry_ids:
+                if entry_id is None:
+                    continue
+                root = find(entry_id)
+                groups.setdefault(root, []).append(entry_id)
+        connector_palette = [
+            "#f5b700",
+            "#1f78ff",
+            "#2ad54e",
+            "#ff4b3a",
+            "#8d5bff",
+            "#00b3a4",
+        ]
+        group_colors = {}
+        entry_root = {}
+        group_sets = {}
+        color_index = 0
+        for root, members in groups.items():
+            group_sets[root] = set(members)
+            for member in members:
+                entry_root[member] = root
+            if len(members) < 2:
+                continue
+            group_colors[root] = connector_palette[color_index % len(connector_palette)]
+            color_index += 1
+        for week_index, index, entry in rows:
             title = entry.get("title", "Bitacora") or "Bitacora"
             subtitle = entry.get("description", "")
             subtitle = subtitle.replace("\n", " ").strip() or "Sin detalles"
+            links = self.clean_links(entry.get("links"))
+            if links:
+                subtitle = f"{subtitle} | Rel: {len(links)}"
+            time_text = str(entry.get("time", "")).strip()
+            if time_text:
+                subtitle = f"{subtitle} | {time_text}"
             if len(subtitle) > 40:
                 subtitle = subtitle[:40].rstrip() + "..."
             date_text = entry.get("date", "")
             date_value = QDate.fromString(str(date_text), "yyyy-MM-dd")
             if not date_value.isValid():
                 date_value = QDate.fromString(
-                    self.week_entry_date(self.current_week), "yyyy-MM-dd"
+                    self.week_entry_date(week_index), "yyyy-MM-dd"
                 )
-                if not date_value.isValid():
-                    date_value = QDate.currentDate()
+            if not date_value.isValid():
+                date_value = QDate.currentDate()
             item = QListWidgetItem(self.notes_list)
-            item.setData(Qt.UserRole, (self.current_week, index))
-            widget = NoteItemWidget(date_value, title, subtitle, self.notes_list)
+            item.setData(Qt.UserRole, (week_index, index))
+            connector_color = None
+            connector_top = False
+            connector_bottom = False
+            entry_id = entry.get("id")
+            if isinstance(entry_id, int):
+                root = entry_root.get(entry_id)
+                if root in group_colors:
+                    connector_color = group_colors[root]
+                    row_index = id_to_row.get(entry_id)
+                    if row_index is not None:
+                        if row_index > 0:
+                            prev_entry_id = entry_ids[row_index - 1]
+                            if prev_entry_id in group_sets.get(root, set()):
+                                connector_top = True
+                        if row_index < len(entry_ids) - 1:
+                            next_entry_id = entry_ids[row_index + 1]
+                            if next_entry_id in group_sets.get(root, set()):
+                                connector_bottom = True
+            widget = NoteItemWidget(
+                date_value,
+                title,
+                subtitle,
+                self.notes_list,
+                connector_color=connector_color,
+                connector_top=connector_top,
+                connector_bottom=connector_bottom,
+            )
             item.setSizeHint(widget.sizeHint())
             self.notes_list.setItemWidget(item, widget)
         self.notes_list.blockSignals(False)
 
-    def select_entry_item(self, entry_index):
+    def select_entry_item(self, entry_index, week_index=None):
         self.current_entry = None
         if entry_index is None:
             self.clear_entry_form()
@@ -1125,7 +1406,13 @@ class MainWindow(QMainWindow):
         for row in range(self.notes_list.count()):
             item = self.notes_list.item(row)
             data = item.data(Qt.UserRole)
-            if data and data[1] == entry_index:
+            if not data:
+                continue
+            if week_index is None and data[1] == entry_index:
+                self.notes_list.setCurrentItem(item)
+                self.current_entry = entry_index
+                return
+            if week_index is not None and data[0] == week_index and data[1] == entry_index:
                 self.notes_list.setCurrentItem(item)
                 self.current_entry = entry_index
                 return
@@ -1141,23 +1428,99 @@ class MainWindow(QMainWindow):
         if not data:
             return
         week_index, entry_index = data
+        self.current_week = week_index
         entries = self.entries_for_week(week_index)
         if 0 <= entry_index < len(entries):
             entry = entries[entry_index]
             self.current_entry = entry_index
             self.title_input.setText(entry.get("title", ""))
             self.desc_edit.setPlainText(entry.get("description", ""))
+            self.refresh_related_list(entry)
+            self.followup_button.setEnabled(True)
             if self.life_widget.view_mode == "days":
                 date_text = str(entry.get("date", "")).strip()
                 date_value = QDate.fromString(date_text, "yyyy-MM-dd")
                 if date_value.isValid():
                     self.life_widget.select_date(date_value)
-        if self.current_week != week_index:
+        if not self.is_solo_view() and self.current_week != week_index:
             self.life_widget.select_week(week_index)
+
+    def refresh_related_list(self, entry):
+        self.related_list.clear()
+        if not isinstance(entry, dict):
+            return
+        links = self.clean_links(entry.get("links"))
+        for link_id in links:
+            found = self.find_entry_by_id(link_id)
+            if not found:
+                continue
+            week_index, entry_index, linked_entry = found
+            date_text = str(linked_entry.get("date", "")).strip()
+            title = linked_entry.get("title", "Entrada") or "Entrada"
+            label = f"{date_text} - {title}"
+            item = QListWidgetItem(label, self.related_list)
+            item.setData(Qt.UserRole, (link_id, week_index, entry_index))
+
+    def on_related_clicked(self, item):
+        data = item.data(Qt.UserRole)
+        if not data:
+            return
+        _, week_index, entry_index = data
+        if week_index is None:
+            return
+        if self.is_solo_view():
+            self.select_entry_item(entry_index, week_index)
+        else:
+            self.life_widget.select_week(week_index)
+            self.refresh_entries_list()
+            self.select_entry_item(entry_index, week_index)
+
+    def create_followup_entry(self):
+        if self.current_week is None or self.current_entry is None:
+            return
+        entries = self.entries_for_week(self.current_week)
+        if not (0 <= self.current_entry < len(entries)):
+            return
+        base_entry = entries[self.current_entry]
+        base_id = self.ensure_entry_id(base_entry)
+        base_entry["links"] = self.clean_links(base_entry.get("links"))
+
+        entry_date = self.selected_entry_date()
+        target_week = self.current_week
+        date_value = QDate.fromString(entry_date, "yyyy-MM-dd")
+        if date_value.isValid():
+            week_index = self.life_widget.week_index_for_date(date_value)
+            if week_index is not None:
+                target_week = week_index
+
+        title = "Accion tomada"
+        if self.current_view() == "trabajo" and self.work_tag:
+            title = f"{self.work_tag} {title}"
+        entry_time = self.current_time_text()
+        new_entry = {
+            "title": title,
+            "description": "",
+            "date": entry_date,
+            "time": entry_time,
+            "links": [base_id],
+        }
+        new_id = self.ensure_entry_id(new_entry)
+        target_entries = self.current_notes().setdefault(target_week, [])
+        target_entries.append(new_entry)
+        if new_id not in base_entry["links"]:
+            base_entry["links"].append(new_id)
+
+        self.life_widget.select_week(target_week)
+        self.refresh_entries_list()
+        self.update_counts()
+        self.select_entry_item(len(target_entries) - 1, target_week)
+        self.save_data()
 
     def clear_entry_form(self):
         self.title_input.setText("")
         self.desc_edit.setPlainText("")
+        self.related_list.clear()
+        self.followup_button.setEnabled(False)
         self.work_tag = None
 
     def update_week_counts(self):
@@ -1310,6 +1673,9 @@ class MainWindow(QMainWindow):
         if isinstance(years_value, int):
             self.years_input.setValue(years_value)
             self.life_widget.set_years(years_value)
+        stored_next_id = data.get("next_entry_id")
+        if isinstance(stored_next_id, int) and stored_next_id > 0:
+            self.next_entry_id = stored_next_id
         notes = data.get("notes", {})
         if isinstance(notes, dict):
             cleaned = {}
@@ -1329,27 +1695,39 @@ class MainWindow(QMainWindow):
                         date_value = QDate.fromString(date_text, "yyyy-MM-dd")
                         if not date_value.isValid():
                             date_text = self.week_entry_date(week_index)
+                        time_text = str(entry.get("time", "")).strip()
+                        time_value = QTime.fromString(time_text, "HH:mm")
+                        if not time_value.isValid():
+                            time_text = ""
+                        links = self.clean_links(entry.get("links"))
+                        entry_id = entry.get("id")
                         if title or desc:
-                            entries.append(
-                                {
-                                    "title": title or "Entrada",
-                                    "description": desc,
-                                    "date": date_text,
-                                }
-                            )
+                            entry_data = {
+                                "title": title or "Entrada",
+                                "description": desc,
+                                "date": date_text,
+                                "time": time_text,
+                                "links": links,
+                            }
+                            if isinstance(entry_id, int) and entry_id > 0:
+                                entry_data["id"] = entry_id
+                            self.ensure_entry_id(entry_data)
+                            entries.append(entry_data)
                     if entries:
                         cleaned[week_index] = entries
                 elif isinstance(value, str) and value.strip():
                     lines = [line.strip() for line in value.splitlines() if line.strip()]
                     title = lines[0] if lines else "Entrada"
                     desc = "\n".join(lines[1:]) if len(lines) > 1 else ""
-                    cleaned[week_index] = [
-                        {
-                            "title": title,
-                            "description": desc,
-                            "date": self.week_entry_date(week_index),
-                        }
-                    ]
+                    entry_data = {
+                        "title": title,
+                        "description": desc,
+                        "date": self.week_entry_date(week_index),
+                        "time": "",
+                        "links": [],
+                    }
+                    self.ensure_entry_id(entry_data)
+                    cleaned[week_index] = [entry_data]
             self.week_notes = cleaned
         work_notes = data.get("work_notes", {})
         if isinstance(work_notes, dict):
@@ -1370,14 +1748,24 @@ class MainWindow(QMainWindow):
                         date_value = QDate.fromString(date_text, "yyyy-MM-dd")
                         if not date_value.isValid():
                             date_text = self.week_entry_date(week_index)
+                        time_text = str(entry.get("time", "")).strip()
+                        time_value = QTime.fromString(time_text, "HH:mm")
+                        if not time_value.isValid():
+                            time_text = ""
+                        links = self.clean_links(entry.get("links"))
+                        entry_id = entry.get("id")
                         if title or desc:
-                            entries.append(
-                                {
-                                    "title": title or "Bitacora",
-                                    "description": desc,
-                                    "date": date_text,
-                                }
-                            )
+                            entry_data = {
+                                "title": title or "Bitacora",
+                                "description": desc,
+                                "date": date_text,
+                                "time": time_text,
+                                "links": links,
+                            }
+                            if isinstance(entry_id, int) and entry_id > 0:
+                                entry_data["id"] = entry_id
+                            self.ensure_entry_id(entry_data)
+                            entries.append(entry_data)
                     if entries:
                         cleaned_work[week_index] = entries
             self.work_notes = cleaned_work
@@ -1390,6 +1778,7 @@ class MainWindow(QMainWindow):
         data = {
             "birth_date": self.birth_input.date().toString("yyyy-MM-dd"),
             "years": self.years_input.value(),
+            "next_entry_id": self.next_entry_id,
             "heatmap_color": self.heatmap_colors_by_view.get("bitacora"),
             "heatmap_color_trabajo": self.heatmap_colors_by_view.get("trabajo"),
             "main_color": self.main_color_combo.currentData(),
