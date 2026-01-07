@@ -1,7 +1,7 @@
 {
   "birth_date": "2000-05-04",
   "years": 80,
-  "next_entry_id": 18,
+  "next_entry_id": 41,
   "heatmap_color": "#40c463",
   "heatmap_color_trabajo": "#2f3b59",
   "main_color": "#3b7c7a",
@@ -11,6 +11,8 @@
         "title": "SORTEO",
         "description": "hoy es el dia del sorteo. Estoy nervioso, veremos que sucede, hicimos pruebas con ever y todo apuntaba a que funcionaria correctamente, pero aun no lo hicimos con los sistemas de luces pantalla y sonido, vendra a verificar a la tarde. Tuve regalo de reyes, fue grato y raro, no me lo esperaba",
         "date": "2026-01-05",
+        "time": "",
+        "action": false,
         "links": [],
         "id": 1
       }
@@ -22,7 +24,11 @@
         "title": "\ud83d\udd34 boton de promo",
         "description": "entregue el boton de la promo a nino, debe de traer el lunes para pruebas",
         "date": "2026-01-05",
-        "links": [],
+        "time": "",
+        "action": false,
+        "links": [
+          40
+        ],
         "id": 2
       }
     ],
@@ -31,6 +37,8 @@
         "title": "\ud83d\udfe2  cheque familiar",
         "description": "matias me entrego un cheque de familliar para depositar el lunes",
         "date": "2026-01-05",
+        "time": "",
+        "action": false,
         "links": [],
         "id": 4
       }
@@ -40,6 +48,8 @@
         "title": "\u26a0\ufe0f pos sin funcionar",
         "description": "El post de la red infonet de la caja 33 no funciona el tactil y ahora se apag\u00f3 y ya no enciende.... ya se inform\u00f3 en el soporte pero aun no tenemos respuestas....",
         "date": "2026-01-05",
+        "time": "",
+        "action": false,
         "links": [],
         "id": 5
       },
@@ -47,6 +57,8 @@
         "title": "\u26a0\ufe0f Nueva bitacora",
         "description": "PC de recepcion de mercaderia no funciona",
         "date": "2026-01-05",
+        "time": "",
+        "action": false,
         "links": [],
         "id": 6
       },
@@ -54,36 +66,184 @@
         "title": "\ud83d\udd34 CHEQUE ita",
         "description": "Fue entregado 2(dos) cheques a don osvaldo en un sobre, ambos de la cuenta tarjeta de Itaugua.",
         "date": "2026-01-06",
-        "links": [],
+        "time": "",
+        "action": false,
+        "links": [
+          39
+        ],
         "id": 7
       },
       {
-        "title": "\ud83d\udfe2 radios",
+        "title": "\ud83d\udd34 radios",
         "description": "Entregue 2(dos) radios a matias.",
         "date": "2026-01-07",
-        "links": [],
+        "time": "14:08",
+        "action": false,
+        "links": [
+          31
+        ],
         "id": 8
       },
       {
         "title": "\ud83d\udfe2 CHEQUE ITA",
         "description": "recibi los 2 cheques que le habia entregado a don osvaldo, no tienen nada, no fueron utilizados",
         "date": "2026-01-07",
-        "links": [],
+        "time": "",
+        "action": false,
+        "links": [
+          32
+        ],
         "id": 9
       },
       {
         "title": "\u26a0\ufe0f POS SIN FUNCIONAR",
         "description": "pos de la red dinelco no carga",
         "date": "2026-01-07",
-        "links": [],
+        "time": "",
+        "action": false,
+        "links": [
+          18
+        ],
         "id": 10
       },
       {
         "title": "\ud83d\udfe2 contrato unico contiental, promo",
         "description": "contrato unico de continental. Contrato de promo que esta por terminar, debo hacerle firmar a don osvaldo.",
         "date": "2026-01-07",
+        "time": "",
+        "action": false,
         "links": [],
         "id": 11
+      },
+      {
+        "title": "accion tomada",
+        "description": "llame a la gente de dinelco, esperarre respuestas",
+        "date": "2026-01-07",
+        "time": "12:38",
+        "action": true,
+        "links": [
+          10
+        ],
+        "id": 18
+      },
+      {
+        "title": "\ud83d\udfe2 CONTRATO DE COMPRA TERRENO LIMPIO",
+        "description": "Don osvaldo entrego documento de la compra de el terreno de la nueva sucursal.",
+        "date": "2026-01-07",
+        "time": "14:04",
+        "action": false,
+        "links": [
+          33
+        ],
+        "id": 19
+      },
+      {
+        "title": "\ud83d\udec8 MAYORISTA",
+        "description": "entregue a mayorista las radios para que matias retire de ahi",
+        "date": "2026-01-07",
+        "time": "14:31",
+        "action": true,
+        "links": [
+          8
+        ],
+        "id": 31
+      },
+      {
+        "title": "\ud83d\udec8 Accion tomada",
+        "description": "guardado en el placar",
+        "date": "2026-01-07",
+        "time": "14:34",
+        "action": true,
+        "links": [
+          9
+        ],
+        "id": 32
+      },
+      {
+        "title": "\ud83d\udec8 Accion tomada",
+        "description": "se creo un bibliorato con el nombre de Suc Limpio y se agrego a los demas en el placar",
+        "date": "2026-01-07",
+        "time": "14:35",
+        "action": true,
+        "links": [
+          19
+        ],
+        "id": 33
+      },
+      {
+        "title": "\ud83d\udd34 CDA",
+        "description": "contrato de cda entregado a Don osvaldo",
+        "date": "2026-01-07",
+        "time": "14:43",
+        "action": false,
+        "links": [
+          35
+        ],
+        "id": 34
+      },
+      {
+        "title": "\ud83d\udd34 Accion tomada",
+        "description": "a\u00f1adido la boleta de deposito que me entrego matias",
+        "date": "2026-01-07",
+        "time": "14:44",
+        "action": true,
+        "links": [
+          34
+        ],
+        "id": 35
+      },
+      {
+        "title": "\ud83d\udd34 efectivo de moneda",
+        "description": "entregado a don osvaldo",
+        "date": "2026-01-07",
+        "time": "14:45",
+        "action": false,
+        "links": [],
+        "id": 36
+      },
+      {
+        "id": 37,
+        "title": "\ud83d\udfe2 contato luque\u00f1o",
+        "description": "recibi contrato de silmara de parte de el sportivo luque\u00f1o. Monto 300.000.000 en un unico pago",
+        "date": "2026-01-07",
+        "time": "15:12",
+        "action": false,
+        "links": [
+          38
+        ]
+      },
+      {
+        "id": 38,
+        "title": "Accion tomada",
+        "description": "se guardo en el bibliorato de contratos vigentes",
+        "date": "2026-01-07",
+        "time": "15:15",
+        "action": true,
+        "links": [
+          37
+        ]
+      },
+      {
+        "id": 39,
+        "title": "\ud83d\udfe2 Accion tomada",
+        "description": "don osvaldo me devolvio los cheques, los cuales no fueron utilizzados ,guarde el sobre en el placard",
+        "date": "2026-01-07",
+        "time": "15:16",
+        "action": true,
+        "links": [
+          7
+        ]
+      },
+      {
+        "id": 40,
+        "title": "\ud83d\udfe2 boton de promo incluido mesa",
+        "description": "nino entrego la mesa nueva para el sorteo de la promo 2025, quedo genial",
+        "date": "2026-01-07",
+        "time": "15:18",
+        "action": true,
+        "links": [
+          2
+        ]
       }
     ]
   }

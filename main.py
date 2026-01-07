@@ -2,8 +2,8 @@ import json
 import os
 import sys
 
-from PySide6.QtCore import QDate, QDateTime, QTime, QRectF, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QFont, QPainter, QPen
+from PySide6.QtCore import QDate, QDateTime, QTime, Qt
+from PySide6.QtGui import QColor, QFont
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -26,555 +26,8 @@ from PySide6.QtWidgets import (
 )
 
 from bitacorasolo import BitacoraSoloTab
-
-
-class LifeWeeksWidget(QWidget):
-    weekSelected = Signal(int)
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.birth_date = QDate.currentDate().addYears(-30)
-        self.today = QDate.currentDate()
-        self.years = 80
-        self.weeks_per_year = 52
-        self.day_cols = 52
-        self.day_rows = 7
-        self.cell = 11
-        self.gap = 3
-        self.left_gutter = 44
-        self.top_gutter = 26
-        self.right_gutter = 10
-        self.bottom_gutter = 10
-
-        self.color_grid = QColor("#2f2b26")
-        self.color_lived = QColor("#3b7c7a")
-        self.color_current = QColor("#e07a2f")
-        self.color_future = QColor("#f4efe6")
-        self.color_selected = QColor("#1f1a15")
-
-        self.entries_mode = False
-        self.selected_week = None
-        self.selected_date = None
-        self.week_counts = {}
-        self.day_counts = {}
-        self.heatmap_colors = []
-        self.view_mode = "weeks"
-
-        self.setFocusPolicy(Qt.StrongFocus)
-        self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-
-    def sizeHint(self):
-        if self.view_mode == "days":
-            width = (
-                self.left_gutter
-                + self.right_gutter
-                + self.day_cols * (self.cell + self.gap)
-                - self.gap
-            )
-            height = (
-                self.top_gutter
-                + self.bottom_gutter
-                + self.day_rows * (self.cell + self.gap)
-                - self.gap
-            )
-        else:
-            width = (
-                self.left_gutter
-                + self.right_gutter
-                + self.weeks_per_year * (self.cell + self.gap)
-                - self.gap
-            )
-            height = (
-                self.top_gutter
-                + self.bottom_gutter
-                + self.years * (self.cell + self.gap)
-                - self.gap
-            )
-        return QSize(width, height)
-
-    def set_birth_date(self, date_value):
-        self.birth_date = date_value
-        self.update()
-
-    def set_years(self, years_value):
-        self.years = years_value
-        self.updateGeometry()
-        self.update()
-
-    def set_cell_size(self, cell, gap):
-        self.cell = cell
-        self.gap = gap
-        self.updateGeometry()
-        self.update()
-
-    def set_view_mode(self, mode):
-        if mode not in ("weeks", "days"):
-            return
-        self.view_mode = mode
-        if self.view_mode == "days":
-            self.ensure_selected_date()
-        self.updateGeometry()
-        self.update()
-
-    def set_entries_mode(self, enabled):
-        self.entries_mode = enabled
-        if enabled and self.selected_week is None:
-            self.selected_week = self.weeks_lived()
-            self.weekSelected.emit(self.selected_week)
-        if enabled and self.view_mode == "days":
-            self.ensure_selected_date()
-        self.update()
-
-    def set_week_counts(self, counts):
-        self.week_counts = counts or {}
-        self.update()
-
-    def set_day_counts(self, counts):
-        self.day_counts = counts or {}
-        self.update()
-
-    def set_heatmap_colors(self, colors):
-        self.heatmap_colors = colors or []
-        self.update()
-
-    def set_main_color(self, color_value):
-        if not color_value:
-            return
-        base = QColor(color_value)
-        if not base.isValid():
-            return
-        self.color_lived = base
-        self.color_current = base.darker(140)
-        self.update()
-
-    def select_week(self, week_index):
-        if week_index is None:
-            return
-        max_index = self.years * self.weeks_per_year - 1
-        if week_index < 0 or week_index > max_index:
-            return
-        self.selected_week = week_index
-        self.weekSelected.emit(week_index)
-        self.update()
-
-    def weeks_lived(self):
-        if self.birth_date > self.today:
-            return 0
-        days = self.birth_date.daysTo(self.today)
-        weeks = days // 7
-        max_weeks = self.years * self.weeks_per_year
-        if weeks < 0:
-            return 0
-        if weeks > max_weeks:
-            return max_weeks
-        return weeks
-
-    def ensure_selected_date(self):
-        start_date = self.daily_start_date()
-        end_date = self.daily_end_date()
-        if (
-            self.selected_date is None
-            or not self.selected_date.isValid()
-            or self.selected_date < start_date
-            or self.selected_date > self.today
-        ):
-            if self.today < start_date:
-                self.selected_date = end_date
-            else:
-                self.selected_date = self.today
-
-    def select_date(self, date_value):
-        if date_value is None or not date_value.isValid():
-            return
-        start_date = self.daily_start_date()
-        end_date = self.daily_end_date()
-        if date_value < start_date or date_value > end_date:
-            return
-        if date_value > self.today:
-            return
-        self.selected_date = date_value
-        self.update()
-
-    def daily_end_date(self):
-        days_to_end = 7 - self.today.dayOfWeek()
-        return self.today.addDays(days_to_end)
-
-    def daily_start_date(self):
-        total_days = self.day_cols * self.day_rows
-        return self.daily_end_date().addDays(-(total_days - 1))
-
-    def week_at(self, pos):
-        x = pos.x() - self.left_gutter
-        y = pos.y() - self.top_gutter
-        if x < 0 or y < 0:
-            return None
-        col = int(x // (self.cell + self.gap))
-        row = int(y // (self.cell + self.gap))
-        if col < 0 or col >= self.weeks_per_year:
-            return None
-        if row < 0 or row >= self.years:
-            return None
-        return row * self.weeks_per_year + col
-
-    def day_at(self, pos):
-        x = pos.x() - self.left_gutter
-        y = pos.y() - self.top_gutter
-        if x < 0 or y < 0:
-            return None
-        col = int(x // (self.cell + self.gap))
-        row = int(y // (self.cell + self.gap))
-        if col < 0 or col >= self.day_cols:
-            return None
-        if row < 0 or row >= self.day_rows:
-            return None
-        return self.daily_start_date().addDays(col * 7 + row)
-
-    def day_index_for_date(self, date_value):
-        if date_value is None or not date_value.isValid():
-            return None
-        start_date = self.daily_start_date()
-        total_days = self.day_cols * self.day_rows
-        index = start_date.daysTo(date_value)
-        if index < 0 or index >= total_days:
-            return None
-        return index
-
-    def date_for_day_index(self, index):
-        if index is None:
-            return None
-        total_days = self.day_cols * self.day_rows
-        if index < 0 or index >= total_days:
-            return None
-        return self.daily_start_date().addDays(index)
-
-    def week_index_for_date(self, date_value):
-        if date_value is None or not date_value.isValid():
-            return None
-        if date_value < self.birth_date:
-            return None
-        days = self.birth_date.daysTo(date_value)
-        return max(0, days // 7)
-
-    def mousePressEvent(self, event):
-        if not self.entries_mode:
-            return
-        self.setFocus()
-        pos = event.position() if hasattr(event, "position") else event.pos()
-        if self.view_mode == "days":
-            date_value = self.day_at(pos)
-            if date_value is not None:
-                if date_value > self.today:
-                    return
-                self.select_date(date_value)
-                week_index = self.week_index_for_date(date_value)
-                if week_index is not None:
-                    self.select_week(week_index)
-                    return
-        else:
-            index = self.week_at(pos)
-            if index is not None:
-                self.select_week(index)
-                return
-        super().mousePressEvent(event)
-
-    def keyPressEvent(self, event):
-        if not self.entries_mode:
-            super().keyPressEvent(event)
-            return
-        if self.view_mode == "days":
-            self.ensure_selected_date()
-            index = self.day_index_for_date(self.selected_date)
-            if index is None:
-                super().keyPressEvent(event)
-                return
-            key = event.key()
-            if key == Qt.Key_Left:
-                index -= self.day_rows
-            elif key == Qt.Key_Right:
-                index += self.day_rows
-            elif key == Qt.Key_Up:
-                index -= 1
-            elif key == Qt.Key_Down:
-                index += 1
-            else:
-                super().keyPressEvent(event)
-                return
-            date_value = self.date_for_day_index(index)
-            if date_value is None:
-                return
-            if date_value > self.today:
-                return
-            self.select_date(date_value)
-            week_index = self.week_index_for_date(date_value)
-            if week_index is not None:
-                self.select_week(week_index)
-            return
-        if self.selected_week is None:
-            self.select_week(self.weeks_lived())
-            return
-        row = self.selected_week // self.weeks_per_year
-        col = self.selected_week % self.weeks_per_year
-        key = event.key()
-        if key == Qt.Key_Left:
-            col = max(0, col - 1)
-        elif key == Qt.Key_Right:
-            col = min(self.weeks_per_year - 1, col + 1)
-        elif key == Qt.Key_Up:
-            row = max(0, row - 1)
-        elif key == Qt.Key_Down:
-            row = min(self.years - 1, row + 1)
-        else:
-            super().keyPressEvent(event)
-            return
-        self.select_week(row * self.weeks_per_year + col)
-
-    def paintEvent(self, event):
-        super().paintEvent(event)
-        if self.view_mode == "days":
-            self.paint_daily()
-            return
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing, False)
-
-        grid_pen = QPen(self.color_grid, 1)
-        current_pen = QPen(self.color_current, 1)
-        selected_pen = QPen(self.color_selected, 1)
-        grid_pen.setCosmetic(True)
-        current_pen.setCosmetic(True)
-        selected_pen.setCosmetic(True)
-
-        weeks_lived = self.weeks_lived()
-
-        label_font = QFont("Segoe UI", 8, QFont.DemiBold)
-        painter.setFont(label_font)
-        painter.setPen(QPen(self.color_grid, 1))
-
-        month_font = QFont("Segoe UI", 7, QFont.DemiBold)
-        painter.setFont(month_font)
-        last_month = None
-        for col in range(self.weeks_per_year):
-            date_value = self.birth_date.addDays(col * 7)
-            month = date_value.month()
-            if last_month is None or month != last_month:
-                x = self.left_gutter + col * (self.cell + self.gap)
-                painter.drawText(x, 12, date_value.toString("MMM"))
-                last_month = month
-
-        painter.setFont(label_font)
-        for year in range(0, self.years, 5):
-            y = self.top_gutter + year * (self.cell + self.gap)
-            painter.drawText(2, y + self.cell, f"{year:02d}")
-
-        for row in range(self.years):
-            for col in range(self.weeks_per_year):
-                index = row * self.weeks_per_year + col
-                x = self.left_gutter + col * (self.cell + self.gap)
-                y = self.top_gutter + row * (self.cell + self.gap)
-                rect = QRectF(x, y, self.cell, self.cell)
-                border_rect = QRectF(x + 0.5, y + 0.5, self.cell - 1, self.cell - 1)
-
-                count = self.week_counts.get(index, 0)
-                if self.entries_mode and self.heatmap_colors:
-                    if count > 0:
-                        tone_index = min(count, len(self.heatmap_colors) - 1)
-                        painter.fillRect(rect, self.heatmap_colors[tone_index])
-                    painter.setPen(grid_pen)
-                    painter.drawRect(border_rect)
-                else:
-                    if index < weeks_lived:
-                        painter.fillRect(rect, self.color_lived)
-                        painter.setPen(grid_pen)
-                        painter.drawRect(border_rect)
-                    elif index == weeks_lived:
-                        painter.fillRect(rect, self.color_future)
-                        painter.setPen(grid_pen)
-                        painter.drawRect(border_rect)
-                    else:
-                        painter.setPen(grid_pen)
-                        painter.drawRect(border_rect)
-                if index == weeks_lived:
-                    painter.setPen(current_pen)
-                    painter.drawRect(border_rect.adjusted(1, 1, -1, -1))
-                    painter.setPen(grid_pen)
-                if self.selected_week == index:
-                    painter.setPen(selected_pen)
-                    painter.drawRect(border_rect.adjusted(1, 1, -1, -1))
-                    painter.setPen(grid_pen)
-
-    def paint_daily(self):
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing, False)
-
-        grid_pen = QPen(self.color_grid, 1)
-        current_pen = QPen(self.color_current, 1)
-        selected_pen = QPen(self.color_selected, 1)
-        grid_pen.setCosmetic(True)
-        current_pen.setCosmetic(True)
-        selected_pen.setCosmetic(True)
-
-        start_date = self.daily_start_date()
-        month_font = QFont("Segoe UI", 7, QFont.DemiBold)
-        painter.setFont(month_font)
-        painter.setPen(QPen(self.color_grid, 1))
-
-        last_month = None
-        for col in range(self.day_cols):
-            date_value = start_date.addDays(col * 7)
-            month = date_value.month()
-            if last_month is None or month != last_month:
-                x = self.left_gutter + col * (self.cell + self.gap)
-                painter.drawText(x, 12, date_value.toString("MMM"))
-                last_month = month
-
-        day_labels = {1: "Mon", 3: "Wed", 5: "Fri"}
-        for row in range(self.day_rows):
-            day_of_week = ((start_date.dayOfWeek() - 1 + row) % 7) + 1
-            label = day_labels.get(day_of_week)
-            if label:
-                y = self.top_gutter + row * (self.cell + self.gap)
-                painter.drawText(6, y + self.cell, label)
-
-        for col in range(self.day_cols):
-            for row in range(self.day_rows):
-                date_value = start_date.addDays(col * 7 + row)
-                key = date_value.toString("yyyy-MM-dd")
-                count = self.day_counts.get(key, 0)
-                x = self.left_gutter + col * (self.cell + self.gap)
-                y = self.top_gutter + row * (self.cell + self.gap)
-                rect = QRectF(x, y, self.cell, self.cell)
-                border_rect = QRectF(x + 0.5, y + 0.5, self.cell - 1, self.cell - 1)
-
-                if self.entries_mode and self.heatmap_colors and count > 0:
-                    tone_index = min(count, len(self.heatmap_colors) - 1)
-                    painter.fillRect(rect, self.heatmap_colors[tone_index])
-                painter.setPen(grid_pen)
-                painter.drawRect(border_rect)
-
-                if date_value == self.today:
-                    painter.setPen(current_pen)
-                    painter.drawRect(border_rect.adjusted(1, 1, -1, -1))
-                    painter.setPen(grid_pen)
-
-                if self.selected_date is not None and date_value == self.selected_date:
-                    painter.setPen(selected_pen)
-                    painter.drawRect(border_rect.adjusted(1, 1, -1, -1))
-                    painter.setPen(grid_pen)
-
-
-class LegendItem(QFrame):
-    def __init__(self, color, text, parent=None):
-        super().__init__(parent)
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(6)
-
-        swatch = QFrame(self)
-        swatch.setFixedSize(12, 12)
-        swatch.setStyleSheet(
-            f"background-color: {color}; border: 1px solid #2b2b2b;"
-        )
-        label = QLabel(text, self)
-        label.setStyleSheet("color: #2b2b2b;")
-
-        layout.addWidget(swatch)
-        layout.addWidget(label)
-
-
-class NoteItemWidget(QFrame):
-    def __init__(
-        self,
-        date_value,
-        title,
-        subtitle,
-        parent=None,
-        connector_color=None,
-        connector_top=False,
-        connector_bottom=False,
-    ):
-        super().__init__(parent)
-        self.setObjectName("noteItem")
-        self.connector_color = QColor(connector_color) if connector_color else None
-        self.connector_top = connector_top
-        self.connector_bottom = connector_bottom
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(26, 8, 10, 8)
-        layout.setSpacing(10)
-
-        month = date_value.toString("MMM").upper()
-        day = date_value.toString("d")
-
-        date_box = QFrame(self)
-        date_box.setObjectName("noteDateBox")
-        date_box.setFixedSize(64, 64)
-        date_layout = QVBoxLayout(date_box)
-        date_layout.setContentsMargins(6, 6, 6, 6)
-        date_layout.setSpacing(0)
-
-        month_label = QLabel(month, date_box)
-        month_label.setObjectName("noteMonth")
-        day_label = QLabel(day, date_box)
-        day_label.setObjectName("noteDay")
-        month_label.setAlignment(Qt.AlignCenter)
-        day_label.setAlignment(Qt.AlignCenter)
-        month_label.setFont(QFont("Segoe UI", 8, QFont.DemiBold))
-        day_label.setFont(QFont("Segoe UI", 18, QFont.Bold))
-
-        date_layout.addWidget(month_label, alignment=Qt.AlignCenter)
-        date_layout.addWidget(day_label, alignment=Qt.AlignCenter)
-
-        text_box = QVBoxLayout()
-        text_box.setSpacing(2)
-        emoji, clean_title = self.split_title_emoji(title)
-        title_row = QHBoxLayout()
-        title_row.setContentsMargins(0, 0, 0, 0)
-        title_row.setSpacing(6)
-        if emoji:
-            emoji_label = QLabel(emoji, self)
-            emoji_label.setFont(QFont("Segoe UI Emoji", 11))
-            emoji_label.setFixedSize(20, 20)
-            emoji_label.setAlignment(Qt.AlignCenter)
-            title_row.addWidget(emoji_label)
-        title_label = QLabel(clean_title, self)
-        title_label.setObjectName("noteTitle")
-        title_label.setFont(QFont("Segoe UI", 9, QFont.DemiBold))
-        title_label.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
-        title_row.addWidget(title_label, 1)
-        subtitle_label = QLabel(subtitle, self)
-        subtitle_label.setObjectName("noteSubtitle")
-
-        text_box.addLayout(title_row)
-        text_box.addWidget(subtitle_label)
-
-        layout.addWidget(date_box)
-        layout.addLayout(text_box, 1)
-
-    def split_title_emoji(self, title):
-        if not title:
-            return "", ""
-        value = title.strip()
-        if len(value) >= 2 and value[1] == " ":
-            emoji = value[0]
-            return emoji, value[2:].lstrip()
-        return "", value
-
-    def paintEvent(self, event):
-        super().paintEvent(event)
-        if not self.connector_color or not self.connector_color.isValid():
-            return
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing, True)
-        pen = QPen(self.connector_color, 6, Qt.SolidLine, Qt.RoundCap)
-        painter.setPen(pen)
-        center_y = self.height() / 2
-        top_y = 6 if self.connector_top else center_y
-        bottom_y = self.height() - 6 if self.connector_bottom else center_y
-        x = 12
-        painter.drawLine(x, top_y, x, bottom_y)
-        painter.setBrush(self.connector_color)
-        painter.setPen(Qt.NoPen)
-        painter.drawEllipse(int(x - 8), int(center_y - 8), 16, 16)
-        painter.setPen(pen)
-        painter.drawLine(x, center_y, x + 10, center_y)
+from theme import apply_theme
+from widgets import LegendItem, LifeWeeksWidget, NoteItemWidget
 
 
 class MainWindow(QMainWindow):
@@ -587,6 +40,8 @@ class MainWindow(QMainWindow):
         self.current_entry = None
         self.loading = False
         self.work_tag = None
+        self.filter_tag = None
+        self.collapsed_parents = set()
         self.next_entry_id = 1
         self.data_path = os.path.join(os.path.dirname(__file__), "life_notes.json")
         self.heatmap_base_color = QColor("#3b7c7a")
@@ -594,6 +49,13 @@ class MainWindow(QMainWindow):
             "bitacora": "#3b7c7a",
             "trabajo": "#2f3b59",
         }
+        self.work_tag_options = [
+            ("\U0001F7E2", "Recibido"),
+            ("\U0001F534", "Entregado"),
+            ("\U0001F6C8", "Info"),
+            ("\u26A0\ufe0f", "Muy importante"),
+        ]
+        self.work_tag_set = {emoji for emoji, _ in self.work_tag_options}
         self.view_mode = "weeks"
 
         central = QWidget(self)
@@ -704,6 +166,43 @@ class MainWindow(QMainWindow):
         self.week_label = QLabel("Semana seleccionada: -", self.notes_panel)
         self.week_label.setStyleSheet("color: #2b2b2b;")
 
+        self.filter_row = QWidget(self.notes_panel)
+        filter_layout = QHBoxLayout(self.filter_row)
+        filter_layout.setContentsMargins(0, 0, 0, 0)
+        filter_layout.setSpacing(6)
+        filter_label = QLabel("Filtrar", self.filter_row)
+        filter_label.setStyleSheet("color: #2b2b2b;")
+        filter_layout.addWidget(filter_label)
+        self.filter_tag_buttons = []
+        all_button = QPushButton("Todos", self.filter_row)
+        all_button.setCheckable(True)
+        all_button.setChecked(True)
+        all_button.clicked.connect(lambda checked=False: self.set_filter_tag(None))
+        filter_layout.addWidget(all_button)
+        self.filter_tag_buttons.append((all_button, None))
+        for emoji, text in self.work_tag_options:
+            button = QPushButton(emoji, self.filter_row)
+            button.setToolTip(text)
+            button.setCheckable(True)
+            button.clicked.connect(
+                lambda checked=False, tag=emoji: self.set_filter_tag(tag)
+            )
+            filter_layout.addWidget(button)
+            self.filter_tag_buttons.append((button, emoji))
+        filter_layout.addStretch(1)
+
+        self.collapse_row = QWidget(self.notes_panel)
+        collapse_layout = QHBoxLayout(self.collapse_row)
+        collapse_layout.setContentsMargins(0, 0, 0, 0)
+        collapse_layout.setSpacing(6)
+        self.collapse_all_button = QPushButton("Contraer todo", self.collapse_row)
+        self.expand_all_button = QPushButton("Desplegar todo", self.collapse_row)
+        self.collapse_all_button.clicked.connect(self.collapse_all)
+        self.expand_all_button.clicked.connect(self.expand_all)
+        collapse_layout.addWidget(self.collapse_all_button)
+        collapse_layout.addWidget(self.expand_all_button)
+        collapse_layout.addStretch(1)
+
         notes_list_label = QLabel("Bitacoras guardadas", self.notes_panel)
         notes_list_label.setStyleSheet("color: #2b2b2b;")
         self.notes_list = QListWidget(self.notes_panel)
@@ -713,6 +212,8 @@ class MainWindow(QMainWindow):
 
         notes_layout.addWidget(notes_title)
         notes_layout.addWidget(self.week_label)
+        notes_layout.addWidget(self.filter_row)
+        notes_layout.addWidget(self.collapse_row)
         notes_layout.addWidget(notes_list_label)
 
         entries_layout = QHBoxLayout()
@@ -741,12 +242,6 @@ class MainWindow(QMainWindow):
         work_tag_label.setObjectName("detailLabel")
         work_tag_layout.addWidget(work_tag_label)
         self.work_tag_buttons = []
-        self.work_tag_options = [
-            ("\U0001F7E2", "Recibido"),
-            ("\U0001F534", "Entregado"),
-            ("\U0001F6C8", "Info"),
-            ("\u26A0\ufe0f", "Muy importante"),
-        ]
         for emoji, text in self.work_tag_options:
             button = QPushButton(emoji, self.work_tag_row)
             button.setToolTip(text)
@@ -862,123 +357,11 @@ class MainWindow(QMainWindow):
         )
         self.tabs.currentChanged.connect(self.on_tab_changed)
 
-        self.apply_theme()
+        apply_theme(self)
         self.update_main_color()
         self.update_heatmap_colors()
         self.load_data()
         self.on_view_changed(self.view_combo.currentIndex())
-
-    def apply_theme(self):
-        self.setStyleSheet(
-            "QWidget { background: #f3efe6; color: #111111; }"
-            "QLabel { font-size: 10pt; }"
-            "QDateEdit, QSpinBox {"
-            "  background: #ffffff;"
-            "  padding: 6px 8px;"
-            "  border: 1px solid #1f1f1f;"
-            "  border-radius: 6px;"
-            "}"
-            "QComboBox {"
-            "  background: #ffffff;"
-            "  padding: 6px 8px;"
-            "  border: 1px solid #1f1f1f;"
-            "  border-radius: 6px;"
-            "}"
-            "QTextEdit {"
-            "  background: #ffffff;"
-            "  border: 1px solid #1f1f1f;"
-            "  border-radius: 6px;"
-            "}"
-            "QLineEdit {"
-            "  background: #ffffff;"
-            "  border: 1px solid #1f1f1f;"
-            "  border-radius: 6px;"
-            "  padding: 6px 8px;"
-            "  min-height: 28px;"
-            "}"
-            "QListWidget {"
-            "  background: #ffffff;"
-            "  border: 1px solid #1f1f1f;"
-            "  border-radius: 6px;"
-            "}"
-            "QPushButton {"
-            "  background: #111111;"
-            "  color: #ffffff;"
-            "  padding: 8px 12px;"
-            "  border-radius: 6px;"
-            "}"
-        )
-        self.notes_panel.setStyleSheet(
-            "QWidget { background: #ffffff; color: #111111; }"
-            "QLabel { font-size: 10pt; }"
-            "#detailLabel { color: #4b4b4b; }"
-            "QTextEdit {"
-            "  background: #ffffff;"
-            "  color: #111111;"
-            "  border: 1px solid #d3cbbb;"
-            "  border-radius: 8px;"
-            "}"
-            "QLineEdit {"
-            "  background: #ffffff;"
-            "  color: #111111;"
-            "  border: 1px solid #d3cbbb;"
-            "  border-radius: 8px;"
-            "  padding: 6px 8px;"
-            "  min-height: 28px;"
-            "}"
-            "QListWidget {"
-            "  background: #ffffff;"
-            "  border: none;"
-            "}"
-            "#detailPanel {"
-            "  background: #faf6ee;"
-            "  border: 1px solid #e1d8c8;"
-            "  border-radius: 10px;"
-            "}"
-            "#noteItem {"
-            "  background: #ffffff;"
-            "  border: 1px solid #e1d8c8;"
-            "  border-radius: 10px;"
-            "}"
-            "#noteDateBox {"
-            "  background: #9c2f1d;"
-            "  border: 1px solid #6f1f14;"
-            "  border-radius: 8px;"
-            "  min-width: 64px;"
-            "  min-height: 64px;"
-            "}"
-            "#noteMonth {"
-            "  color: #ffffff;"
-            "  background: transparent;"
-            "  font-size: 8pt;"
-            "  letter-spacing: 1px;"
-            "}"
-            "#noteDay {"
-            "  color: #ffffff;"
-            "  background: transparent;"
-            "  font-size: 18pt;"
-            "  font-weight: bold;"
-            "}"
-            "#noteTitle {"
-            "  color: #111111;"
-            "  font-weight: bold;"
-            "  padding-top: 2px;"
-            "}"
-            "#noteSubtitle {"
-            "  color: #6a6358;"
-            "  font-size: 9pt;"
-            "}"
-            "QPushButton {"
-            "  background: #1d2b3a;"
-            "  color: #ffffff;"
-            "  padding: 8px 10px;"
-            "  border-radius: 10px;"
-            "  margin: 0 2px;"
-            "}"
-            "QPushButton#dangerButton {"
-            "  background: #a33a2a;"
-            "}"
-        )
 
     def on_view_changed(self, index):
         if self.is_solo_view() and index == 0:
@@ -989,7 +372,7 @@ class MainWindow(QMainWindow):
         entries_mode = index in (1, 2)
         solo_mode = self.is_solo_view()
         self.current_entry = None
-        self.notes_panel.setVisible(entries_mode)
+        self.notes_panel.setVisible(True)
         self.life_widget.set_entries_mode(entries_mode)
         self.heatmap_label.setVisible(entries_mode and not solo_mode)
         self.heatmap_combo.setVisible(entries_mode and not solo_mode)
@@ -1009,8 +392,17 @@ class MainWindow(QMainWindow):
         else:
             self.life_widget.set_week_counts({})
             self.life_widget.set_day_counts({})
+            if self.life_widget.selected_week is None:
+                self.life_widget.select_week(self.life_widget.weeks_lived())
+            self.on_week_selected(self.life_widget.selected_week)
         self.heatmap_legend.setVisible(entries_mode and not solo_mode)
         self.work_tag_row.setVisible(self.current_view() == "trabajo")
+        show_filter = self.current_view() == "trabajo"
+        self.filter_row.setVisible(show_filter)
+        self.collapse_row.setVisible(True)
+        if not show_filter and self.filter_tag is not None:
+            self.filter_tag = None
+        self.update_filter_buttons()
 
     def is_solo_view(self):
         return self.tabs.currentIndex() == 1
@@ -1110,22 +502,23 @@ class MainWindow(QMainWindow):
                 continue
             for entry_index, entry in enumerate(entries):
                 rows.append((week_index, entry_index, entry))
-        def sort_key(row):
-            entry = row[2]
-            date_text = str(entry.get("date", "")).strip()
-            date_value = QDate.fromString(date_text, "yyyy-MM-dd")
-            if not date_value.isValid():
-                date_value = QDate.fromString(
-                    self.week_entry_date(row[0]), "yyyy-MM-dd"
-                )
-            time_text = str(entry.get("time", "")).strip()
-            time_value = QTime.fromString(time_text, "HH:mm")
-            if not time_value.isValid():
-                time_value = QTime(0, 0)
-            date_time = QDateTime(date_value, time_value)
-            return date_time.toSecsSinceEpoch()
-        rows.sort(key=sort_key, reverse=True)
+        rows.sort(key=self.entry_date_key, reverse=True)
         return rows
+
+    def entry_date_key(self, row):
+        entry = row[2]
+        date_text = str(entry.get("date", "")).strip()
+        date_value = QDate.fromString(date_text, "yyyy-MM-dd")
+        if not date_value.isValid():
+            date_value = QDate.fromString(
+                self.week_entry_date(row[0]), "yyyy-MM-dd"
+            )
+        time_text = str(entry.get("time", "")).strip()
+        time_value = QTime.fromString(time_text, "HH:mm")
+        if not time_value.isValid():
+            time_value = QTime(0, 0)
+        date_time = QDateTime(date_value, time_value)
+        return date_time.toSecsSinceEpoch()
 
     def clean_links(self, links):
         if not isinstance(links, list):
@@ -1199,6 +592,7 @@ class MainWindow(QMainWindow):
             "description": "",
             "date": entry_date,
             "time": entry_time,
+            "action": False,
             "links": [],
         }
         self.ensure_entry_id(entry)
@@ -1227,6 +621,7 @@ class MainWindow(QMainWindow):
                     "description": description,
                     "date": entry_date,
                     "time": entry_time,
+                    "action": False,
                     "links": [],
                 }
             )
@@ -1240,12 +635,14 @@ class MainWindow(QMainWindow):
             entry_time = existing.get("time") or self.current_time_text()
             entry_links = self.clean_links(existing.get("links"))
             entry_id = existing.get("id")
+            is_action = bool(existing.get("action")) or self.is_action_entry(existing)
             entries[self.current_entry] = {
                 "id": entry_id,
                 "title": title,
                 "description": description,
                 "date": entry_date,
                 "time": entry_time,
+                "action": is_action,
                 "links": entry_links,
             }
             self.ensure_entry_id(entries[self.current_entry])
@@ -1279,16 +676,81 @@ class MainWindow(QMainWindow):
             self.clear_entry_form()
             self.notes_list.blockSignals(False)
             return
+        rows = self.filtered_rows()
+        children_map, child_ids, id_to_row, entries_by_id = self.build_children_map(rows)
+
+        subtree_cache = {}
+
+        def subtree_max_date(entry_id):
+            cached = subtree_cache.get(entry_id)
+            if cached is not None:
+                return cached
+            row = id_to_row.get(entry_id)
+            if not row:
+                return 0
+            max_value = self.entry_date_key(row)
+            for child in children_map.get(entry_id, []):
+                child_id = child[2].get("id")
+                if child_id is not None:
+                    max_value = max(max_value, subtree_max_date(child_id))
+                else:
+                    max_value = max(max_value, self.entry_date_key(child))
+            subtree_cache[entry_id] = max_value
+            return max_value
+
+        display_rows = []
+
+        def add_row(row, indent_level, has_children, is_child):
+            display_rows.append(
+                (row[0], row[1], row[2], indent_level, has_children, is_child)
+            )
+
+        def add_subtree(entry_id, indent_level):
+            row = id_to_row.get(entry_id)
+            if not row:
+                return
+            children = children_map.get(entry_id, [])
+            has_children = bool(children)
+            add_row(row, indent_level, has_children, indent_level > 0)
+            if has_children and entry_id not in self.collapsed_parents:
+                children_sorted = sorted(children, key=self.entry_date_key)
+                for child in children_sorted:
+                    child_id = child[2].get("id")
+                    if child_id is not None:
+                        add_subtree(child_id, indent_level + 1)
+                    else:
+                        add_row(child, indent_level + 1, False, True)
+
         if self.is_solo_view():
-            rows = self.all_entries_for_view()
+            parent_rows = []
+            for row in rows:
+                entry = row[2]
+                entry_id = entry.get("id")
+                if entry_id is not None and entry_id in child_ids:
+                    continue
+                if entry_id is None:
+                    parent_rows.append((self.entry_date_key(row), None, row))
+                else:
+                    parent_rows.append((subtree_max_date(entry_id), entry_id, row))
+            parent_rows.sort(key=lambda item: item[0], reverse=True)
+            for _, entry_id, row in parent_rows:
+                if entry_id is None:
+                    add_row(row, 0, False, False)
+                else:
+                    add_subtree(entry_id, 0)
         else:
-            rows = [
-                (self.current_week, index, entry)
-                for index, entry in enumerate(self.entries_for_week(self.current_week))
-            ]
+            for row in rows:
+                entry = row[2]
+                entry_id = entry.get("id")
+                if entry_id is not None and entry_id in child_ids:
+                    continue
+                if entry_id is None:
+                    add_row(row, 0, False, False)
+                else:
+                    add_subtree(entry_id, 0)
         entry_ids = []
         id_to_row = {}
-        for row_index, row in enumerate(rows):
+        for row_index, row in enumerate(display_rows):
             entry = row[2]
             entry_id = entry.get("id")
             if isinstance(entry_id, int):
@@ -1296,35 +758,17 @@ class MainWindow(QMainWindow):
                 id_to_row[entry_id] = row_index
             else:
                 entry_ids.append(None)
-        groups = {}
-        if entry_ids:
-            parent = {}
-
-            def find(item):
-                while parent[item] != item:
-                    parent[item] = parent[parent[item]]
-                    item = parent[item]
-                return item
-
-            def union(a, b):
-                root_a = find(a)
-                root_b = find(b)
-                if root_a != root_b:
-                    parent[root_b] = root_a
-
-            for entry_id in entry_ids:
-                if entry_id is not None:
-                    parent[entry_id] = entry_id
-            for entry_id, row_index in id_to_row.items():
-                entry = rows[row_index][2]
-                for link_id in self.clean_links(entry.get("links")):
-                    if link_id in parent:
-                        union(entry_id, link_id)
-            for entry_id in entry_ids:
-                if entry_id is None:
-                    continue
-                root = find(entry_id)
-                groups.setdefault(root, []).append(entry_id)
+        direct_links = {}
+        for entry_id, entry in entries_by_id.items():
+            links = set(self.clean_links(entry.get("links")))
+            direct_links[entry_id] = links
+        mutual_links = {}
+        for entry_id, links in direct_links.items():
+            mutual_links[entry_id] = {
+                link_id
+                for link_id in links
+                if entry_id in direct_links.get(link_id, set())
+            }
         connector_palette = [
             "#f5b700",
             "#1f78ff",
@@ -1333,19 +777,20 @@ class MainWindow(QMainWindow):
             "#8d5bff",
             "#00b3a4",
         ]
-        group_colors = {}
-        entry_root = {}
-        group_sets = {}
+        pair_colors = {}
         color_index = 0
-        for root, members in groups.items():
-            group_sets[root] = set(members)
-            for member in members:
-                entry_root[member] = root
-            if len(members) < 2:
-                continue
-            group_colors[root] = connector_palette[color_index % len(connector_palette)]
+
+        def pair_color(a_id, b_id):
+            nonlocal color_index
+            pair = tuple(sorted((a_id, b_id)))
+            color = pair_colors.get(pair)
+            if color:
+                return color
+            color = connector_palette[color_index % len(connector_palette)]
             color_index += 1
-        for week_index, index, entry in rows:
+            pair_colors[pair] = color
+            return color
+        for week_index, index, entry, indent_level, has_children, is_child in display_rows:
             title = entry.get("title", "Bitacora") or "Bitacora"
             subtitle = entry.get("description", "")
             subtitle = subtitle.replace("\n", " ").strip() or "Sin detalles"
@@ -1372,19 +817,33 @@ class MainWindow(QMainWindow):
             connector_bottom = False
             entry_id = entry.get("id")
             if isinstance(entry_id, int):
-                root = entry_root.get(entry_id)
-                if root in group_colors:
-                    connector_color = group_colors[root]
-                    row_index = id_to_row.get(entry_id)
-                    if row_index is not None:
-                        if row_index > 0:
-                            prev_entry_id = entry_ids[row_index - 1]
-                            if prev_entry_id in group_sets.get(root, set()):
-                                connector_top = True
-                        if row_index < len(entry_ids) - 1:
-                            next_entry_id = entry_ids[row_index + 1]
-                            if next_entry_id in group_sets.get(root, set()):
-                                connector_bottom = True
+                row_index = id_to_row.get(entry_id)
+                if row_index is not None:
+                    prev_entry_id = (
+                        entry_ids[row_index - 1] if row_index > 0 else None
+                    )
+                    next_entry_id = (
+                        entry_ids[row_index + 1]
+                        if row_index < len(entry_ids) - 1
+                        else None
+                    )
+                    linked_prev = (
+                        prev_entry_id in mutual_links.get(entry_id, set())
+                        if prev_entry_id is not None
+                        else False
+                    )
+                    linked_next = (
+                        next_entry_id in mutual_links.get(entry_id, set())
+                        if next_entry_id is not None
+                        else False
+                    )
+                    if linked_prev:
+                        connector_top = True
+                        connector_color = pair_color(entry_id, prev_entry_id)
+                    if linked_next:
+                        connector_bottom = True
+                        if connector_color is None:
+                            connector_color = pair_color(entry_id, next_entry_id)
             widget = NoteItemWidget(
                 date_value,
                 title,
@@ -1393,7 +852,13 @@ class MainWindow(QMainWindow):
                 connector_color=connector_color,
                 connector_top=connector_top,
                 connector_bottom=connector_bottom,
+                indent_level=indent_level,
+                has_children=has_children,
+                collapsed=entry_id in self.collapsed_parents,
+                entry_id=entry_id,
             )
+            if has_children:
+                widget.collapseClicked.connect(self.toggle_parent_collapse)
             item.setSizeHint(widget.sizeHint())
             self.notes_list.setItemWidget(item, widget)
         self.notes_list.blockSignals(False)
@@ -1502,6 +967,7 @@ class MainWindow(QMainWindow):
             "description": "",
             "date": entry_date,
             "time": entry_time,
+            "action": True,
             "links": [base_id],
         }
         new_id = self.ensure_entry_id(new_entry)
@@ -1593,6 +1059,103 @@ class MainWindow(QMainWindow):
         if emoji:
             title = f"{emoji} {title}".strip()
         self.title_input.setText(title)
+
+    def entry_tag(self, entry):
+        title = str(entry.get("title", "")).strip()
+        if len(title) >= 2 and title[1] == " ":
+            emoji = title[0]
+            if emoji in self.work_tag_set:
+                return emoji
+        return None
+
+    def set_filter_tag(self, emoji):
+        if emoji is not None and emoji not in self.work_tag_set:
+            return
+        self.filter_tag = emoji
+        self.update_filter_buttons()
+        self.refresh_entries_list()
+
+    def update_filter_buttons(self):
+        for button, tag in self.filter_tag_buttons:
+            button.blockSignals(True)
+            button.setChecked(tag == self.filter_tag)
+            if self.filter_tag is None and tag is None:
+                button.setChecked(True)
+            button.blockSignals(False)
+
+    def filtered_rows(self):
+        if self.is_solo_view():
+            rows = self.all_entries_for_view()
+        else:
+            rows = [
+                (self.current_week, index, entry)
+                for index, entry in enumerate(self.entries_for_week(self.current_week))
+            ]
+        if self.current_view() == "trabajo" and self.filter_tag:
+            rows = [
+                row for row in rows if self.entry_tag(row[2]) == self.filter_tag
+            ]
+        return rows
+
+    def build_children_map(self, rows):
+        id_to_row = {}
+        entries_by_id = {}
+        for row in rows:
+            entry = row[2]
+            entry_id = entry.get("id")
+            if isinstance(entry_id, int):
+                id_to_row[entry_id] = row
+                entries_by_id[entry_id] = entry
+        children_map = {}
+        child_ids = set()
+        for row in rows:
+            entry = row[2]
+            entry_id = entry.get("id")
+            parent_id = self.action_parent_id(entry, entries_by_id)
+            if parent_id is None or entry_id is None:
+                continue
+            if parent_id in id_to_row:
+                children_map.setdefault(parent_id, []).append(row)
+                child_ids.add(entry_id)
+        return children_map, child_ids, id_to_row, entries_by_id
+
+    def collapse_all(self):
+        rows = self.filtered_rows()
+        children_map, _, _, _ = self.build_children_map(rows)
+        self.collapsed_parents = set(children_map.keys())
+        self.refresh_entries_list()
+
+    def expand_all(self):
+        self.collapsed_parents = set()
+        self.refresh_entries_list()
+
+    def is_action_entry(self, entry):
+        if entry.get("action") is True:
+            return True
+        title = str(entry.get("title", "")).strip().lower()
+        return title.startswith("accion tomada")
+
+    def action_parent_id(self, entry, entries_by_id):
+        if not self.is_action_entry(entry):
+            return None
+        links = self.clean_links(entry.get("links"))
+        if not links:
+            return None
+        parent_id = links[0]
+        parent = entries_by_id.get(parent_id)
+        if not parent:
+            return None
+        parent_links = self.clean_links(parent.get("links"))
+        if entry.get("id") not in parent_links:
+            return None
+        return parent_id
+
+    def toggle_parent_collapse(self, entry_id):
+        if entry_id in self.collapsed_parents:
+            self.collapsed_parents.remove(entry_id)
+        else:
+            self.collapsed_parents.add(entry_id)
+        self.refresh_entries_list()
 
     def build_heatmap_colors(self, base_color):
         h, s, l, a = base_color.getHsl()
@@ -1707,8 +1270,11 @@ class MainWindow(QMainWindow):
                                 "description": desc,
                                 "date": date_text,
                                 "time": time_text,
+                                "action": entry.get("action") is True,
                                 "links": links,
                             }
+                            if self.is_action_entry(entry_data):
+                                entry_data["action"] = True
                             if isinstance(entry_id, int) and entry_id > 0:
                                 entry_data["id"] = entry_id
                             self.ensure_entry_id(entry_data)
@@ -1724,6 +1290,7 @@ class MainWindow(QMainWindow):
                         "description": desc,
                         "date": self.week_entry_date(week_index),
                         "time": "",
+                        "action": False,
                         "links": [],
                     }
                     self.ensure_entry_id(entry_data)
@@ -1760,8 +1327,11 @@ class MainWindow(QMainWindow):
                                 "description": desc,
                                 "date": date_text,
                                 "time": time_text,
+                                "action": entry.get("action") is True,
                                 "links": links,
                             }
+                            if self.is_action_entry(entry_data):
+                                entry_data["action"] = True
                             if isinstance(entry_id, int) and entry_id > 0:
                                 entry_data["id"] = entry_id
                             self.ensure_entry_id(entry_data)
