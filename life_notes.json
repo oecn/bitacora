@@ -7,8 +7,8 @@
   "notes": {
     "1339": [
       {
-        "title": "pruebamk1",
-        "description": "probando",
+        "title": "SORTEO",
+        "description": "hoy es el dia del sorteo. Estoy nervioso, veremos que sucede, hicimos pruebas con ever y todo apuntaba a que funcionaria correctamente, pero aun no lo hicimos con los sistemas de luces pantalla y sonido, vendra a verificar a la tarde. Tuve regalo de reyes, fue grato y raro, no me lo esperaba",
         "date": "2026-01-05"
       }
     ]
@@ -43,6 +43,31 @@
         "title": "\u26a0\ufe0f Nueva bitacora",
         "description": "PC de recepcion de mercaderia no funciona",
         "date": "2026-01-05"
+      },
+      {
+        "title": "\ud83d\udd34 CHEQUE ita",
+        "description": "Fue entregado 2(dos) cheques a don osvaldo en un sobre, ambos de la cuenta tarjeta de Itaugua.",
+        "date": "2026-01-06"
+      },
+      {
+        "title": "\ud83d\udfe2 radios",
+        "description": "Entregue 2(dos) radios a matias.",
+        "date": "2026-01-07"
+      },
+      {
+        "title": "\ud83d\udfe2 CHEQUE ITA",
+        "description": "recibi los 2 cheques que le habia entregado a don osvaldo, no tienen nada, no fueron utilizados",
+        "date": "2026-01-07"
+      },
+      {
+        "title": "\u26a0\ufe0f POS SIN FUNCIONAR",
+        "description": "pos de la red dinelco no carga",
+        "date": "2026-01-07"
+      },
+      {
+        "title": "\ud83d\udfe2 contrato unico contiental, promo",
+        "description": "contrato unico de continental. Contrato de promo que esta por terminar, debo hacerle firmar a don osvaldo.",
+        "date": "2026-01-07"
       }
     ]
   }
