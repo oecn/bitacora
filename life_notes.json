@@ -1,7 +1,7 @@
 {
   "birth_date": "2000-05-04",
   "years": 80,
-  "next_entry_id": 41,
+  "next_entry_id": 43,
   "heatmap_color": "#40c463",
   "heatmap_color_trabajo": "#2f3b59",
   "main_color": "#3b7c7a",
@@ -15,6 +15,15 @@
         "action": false,
         "links": [],
         "id": 1
+      },
+      {
+        "title": "titulo a al vuelta de la esquina",
+        "description": "Ya paso el tiempo reglamentado en la pagina para retirar mi titulo de ingeniero ya visado. Me entere que gael ya mando tramitar su carnet de ingeniero biomedico, ademas me paso la pagina de la cual debo de llevar mis documentos para tramitarlo. Tendre mi titulo ya finalmente completo y visado, se siente bien, no como esperaba pero mas de lo que imagine. Tengo aun que decidir que maestria o que seguir luego de esto, pero estoy seguro que no me gustaria quedarme sin aprender algo nuevo este 2026",
+        "date": "2026-01-08",
+        "time": "15:00",
+        "action": false,
+        "links": [],
+        "id": 42
       }
     ]
   },
@@ -202,7 +211,6 @@
         "id": 36
       },
       {
-        "id": 37,
         "title": "\ud83d\udfe2 contato luque\u00f1o",
         "description": "recibi contrato de silmara de parte de el sportivo luque\u00f1o. Monto 300.000.000 en un unico pago",
         "date": "2026-01-07",
@@ -210,10 +218,10 @@
         "action": false,
         "links": [
           38
-        ]
+        ],
+        "id": 37
       },
       {
-        "id": 38,
         "title": "Accion tomada",
         "description": "se guardo en el bibliorato de contratos vigentes",
         "date": "2026-01-07",
@@ -221,10 +229,10 @@
         "action": true,
         "links": [
           37
-        ]
+        ],
+        "id": 38
       },
       {
-        "id": 39,
         "title": "\ud83d\udfe2 Accion tomada",
         "description": "don osvaldo me devolvio los cheques, los cuales no fueron utilizzados ,guarde el sobre en el placard",
         "date": "2026-01-07",
@@ -232,10 +240,10 @@
         "action": true,
         "links": [
           7
-        ]
+        ],
+        "id": 39
       },
       {
-        "id": 40,
         "title": "\ud83d\udfe2 boton de promo incluido mesa",
         "description": "nino entrego la mesa nueva para el sorteo de la promo 2025, quedo genial",
         "date": "2026-01-07",
@@ -243,7 +251,17 @@
         "action": true,
         "links": [
           2
-        ]
+        ],
+        "id": 40
+      },
+      {
+        "title": "\ud83d\udd34 certificado de promos",
+        "description": "se entregaron las facturas, el ccertificado de ventqa de los 3 vehiculos, el contrato de venta, la garantia de los vehiculos y las 3 chapas provisorias. Entregadas a silmara",
+        "date": "2026-01-08",
+        "time": "14:58",
+        "action": false,
+        "links": [],
+        "id": 41
       }
     ]
   }

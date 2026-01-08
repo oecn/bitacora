@@ -322,9 +322,13 @@ class LifeWeeksWidget(QWidget):
         grid_pen = QPen(self.color_grid, 1)
         current_pen = QPen(self.color_current, 1)
         selected_pen = QPen(self.color_selected, 1)
+        current_glow_pen = QPen(self.color_current, 2)
+        selected_glow_pen = QPen(self.color_selected, 2)
         grid_pen.setCosmetic(True)
         current_pen.setCosmetic(True)
         selected_pen.setCosmetic(True)
+        current_glow_pen.setCosmetic(True)
+        selected_glow_pen.setCosmetic(True)
 
         weeks_lived = self.weeks_lived()
 
@@ -376,12 +380,24 @@ class LifeWeeksWidget(QWidget):
                         painter.setPen(grid_pen)
                         painter.drawRect(border_rect)
                 if index == weeks_lived:
+                    painter.fillRect(
+                        rect.adjusted(1, 1, -1, -1),
+                        QColor(self.color_current.red(), self.color_current.green(), self.color_current.blue(), 40),
+                    )
                     painter.setPen(current_pen)
                     painter.drawRect(border_rect.adjusted(1, 1, -1, -1))
+                    painter.setPen(current_glow_pen)
+                    painter.drawRect(border_rect.adjusted(2, 2, -2, -2))
                     painter.setPen(grid_pen)
                 if self.selected_week == index:
+                    painter.fillRect(
+                        rect.adjusted(1, 1, -1, -1),
+                        QColor(self.color_selected.red(), self.color_selected.green(), self.color_selected.blue(), 30),
+                    )
                     painter.setPen(selected_pen)
                     painter.drawRect(border_rect.adjusted(1, 1, -1, -1))
+                    painter.setPen(selected_glow_pen)
+                    painter.drawRect(border_rect.adjusted(2, 2, -2, -2))
                     painter.setPen(grid_pen)
 
     def paint_daily(self):
@@ -391,9 +407,13 @@ class LifeWeeksWidget(QWidget):
         grid_pen = QPen(self.color_grid, 1)
         current_pen = QPen(self.color_current, 1)
         selected_pen = QPen(self.color_selected, 1)
+        current_glow_pen = QPen(self.color_current, 2)
+        selected_glow_pen = QPen(self.color_selected, 2)
         grid_pen.setCosmetic(True)
         current_pen.setCosmetic(True)
         selected_pen.setCosmetic(True)
+        current_glow_pen.setCosmetic(True)
+        selected_glow_pen.setCosmetic(True)
 
         start_date = self.daily_start_date()
         month_font = QFont("Segoe UI", 7, QFont.DemiBold)
@@ -434,13 +454,25 @@ class LifeWeeksWidget(QWidget):
                 painter.drawRect(border_rect)
 
                 if date_value == self.today:
+                    painter.fillRect(
+                        rect.adjusted(1, 1, -1, -1),
+                        QColor(self.color_current.red(), self.color_current.green(), self.color_current.blue(), 40),
+                    )
                     painter.setPen(current_pen)
                     painter.drawRect(border_rect.adjusted(1, 1, -1, -1))
+                    painter.setPen(current_glow_pen)
+                    painter.drawRect(border_rect.adjusted(2, 2, -2, -2))
                     painter.setPen(grid_pen)
 
                 if self.selected_date is not None and date_value == self.selected_date:
+                    painter.fillRect(
+                        rect.adjusted(1, 1, -1, -1),
+                        QColor(self.color_selected.red(), self.color_selected.green(), self.color_selected.blue(), 30),
+                    )
                     painter.setPen(selected_pen)
                     painter.drawRect(border_rect.adjusted(1, 1, -1, -1))
+                    painter.setPen(selected_glow_pen)
+                    painter.drawRect(border_rect.adjusted(2, 2, -2, -2))
                     painter.setPen(grid_pen)
 
 
